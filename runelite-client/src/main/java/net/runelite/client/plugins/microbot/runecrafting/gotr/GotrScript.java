@@ -147,7 +147,7 @@ public class GotrScript extends Script {
                     sleepUntil(() -> Rs2Equipment.isWearing(ItemID.BINDING_NECKLACE), 2000);
                 }
 
-                if (!Rs2Inventory.hasItem("Binding necklace") && !Rs2Equipment.isWearing("Binding necklace")) {
+                if (!Rs2Inventory.hasItem(ItemID.BINDING_NECKLACE) && !Rs2Equipment.isWearing(ItemID.BINDING_NECKLACE)) {
                     configManager.setConfiguration(config.configGroup, "noBinding", true);
                 } else {
                     configManager.setConfiguration(config.configGroup, "noBinding", false);
@@ -158,7 +158,13 @@ public class GotrScript extends Script {
                     configManager.setConfiguration(config.configGroup, "timeout", true);
                 }
 
-                checkPouches(Rs2Inventory.anyPouchUnknown(), 1500, 300);
+//                checkPouches(Rs2Inventory.anyPouchUnknown(), 1500, 300);
+
+                if (Rs2Inventory.anyPouchUnknown()) {
+                    Rs2Inventory.checkPouches();
+                    sleep(Rs2Random.randomGaussian(1500, 300));
+                    return; // bail from this loop iteration to avoid repeating logic on unknown state
+                }
 
                 //IS INSIDE THE MINIGAME
                 int timeToStart = 0;
@@ -478,7 +484,7 @@ public class GotrScript extends Script {
             }
         }
 
-        if (config.noBinding() || config.timeout()) {
+        if (config.timeout() || (config.enabled() && config.noBinding())) {
             if (!onBankRun()) {
                 sleepGaussian(1200, 150);
                 return true;
@@ -496,7 +502,7 @@ public class GotrScript extends Script {
 
 
     private boolean enterMinigame() {
-        if (config.noBinding() || config.timeout()) {
+        if (config.timeout() || (config.enabled() && config.noBinding())) {
             if (!onBankRun()) {
                 sleepGaussian(1200, 150);
                 return false;
@@ -513,12 +519,12 @@ public class GotrScript extends Script {
         return false;
     }
 
-    private void checkPouches(boolean anyPouchUnknown, int mean, int stddev) {
-        if (anyPouchUnknown) {
-            Rs2Inventory.checkPouches();
-            sleep(Rs2Random.randomGaussian(mean, stddev));
-        }
-    }
+//    private void checkPouches(boolean anyPouchUnknown, int mean, int stddev) {
+//        if (anyPouchUnknown) {
+//            Rs2Inventory.checkPouches();
+//            sleep(Rs2Random.randomGaussian(mean, stddev));
+//        }
+//    }
 
     private boolean mineHugeGuardianRemain() {
         if (isInHugeMine()) {
@@ -554,7 +560,7 @@ public class GotrScript extends Script {
     }
 
     private void mineGuardianRemains() {
-        if (((getGuardiansPower() == 100) || (getGuardiansPower() == 0)) && (config.timeout() || config.noBinding())) {
+        if (((getGuardiansPower() == 100) || (getGuardiansPower() == 0)) && ((config.timeout() || (config.enabled() && config.noBinding())))) {
             if (!onBankRun()) {
                 sleepGaussian(1200, 150);
                 return;
@@ -592,7 +598,7 @@ public class GotrScript extends Script {
                     if (Rs2Equipment.isWearing("dragon pickaxe")) {
                         Rs2Combat.setSpecState(true, 1000);
                     }
-                    checkPouches(Rs2Random.between(1, 20) == 2, Rs2Random.between(100, 600), Rs2Random.between(100, 300));
+//                    checkPouches(Rs2Random.between(1, 20) == 2, Rs2Random.between(100, 600), Rs2Random.between(100, 300));
 
                     repairPouches();
                     Rs2GameObject.interact(ObjectID.LARGE_GUARDIAN_REMAINS);
@@ -821,9 +827,12 @@ public class GotrScript extends Script {
 
         if (!config.enabled()) {
             if (config.timeout()) {
+                Rs2Bank.walkToBank();
+                Rs2Player.waitForWalking();
                 configManager.setConfiguration(config.configGroup, "timeout", false);
                 BreakHandlerScript.setLockState(false);
                 BreakHandlerScript.breakIn = 0;
+                sleepGaussian(1200, 150);
             }
             return true;
         }
