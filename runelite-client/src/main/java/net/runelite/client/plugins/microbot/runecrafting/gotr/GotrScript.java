@@ -1,9 +1,11 @@
 package net.runelite.client.plugins.microbot.runecrafting.gotr;
 
 import com.google.common.collect.ImmutableList;
+import com.google.inject.Inject;
 import net.runelite.api.*;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.widgets.Widget;
+import net.runelite.client.config.ConfigManager;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
@@ -12,6 +14,7 @@ import net.runelite.client.plugins.microbot.runecrafting.gotr.data.GuardianPorta
 import net.runelite.client.plugins.microbot.runecrafting.gotr.data.Mode;
 import net.runelite.client.plugins.microbot.runecrafting.gotr.data.RuneType;
 import net.runelite.client.plugins.microbot.util.Global;
+import net.runelite.client.plugins.microbot.util.bank.Rs2Bank;
 import net.runelite.client.plugins.microbot.util.combat.Rs2Combat;
 import net.runelite.client.plugins.microbot.util.dialogues.Rs2Dialogue;
 import net.runelite.client.plugins.microbot.util.equipment.Rs2Equipment;
@@ -25,6 +28,7 @@ import net.runelite.client.plugins.microbot.util.npc.Rs2NpcModel;
 import net.runelite.client.plugins.microbot.util.player.Rs2Player;
 import net.runelite.client.plugins.microbot.util.walker.Rs2Walker;
 import net.runelite.client.plugins.microbot.util.widget.Rs2Widget;
+import net.runelite.client.plugins.microbot.breakhandler.BreakHandlerScript;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -35,7 +39,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static net.runelite.client.plugins.microbot.Microbot.log;
-
 
 public class GotrScript extends Script {
 
@@ -58,7 +61,15 @@ public class GotrScript extends Script {
     public static int elementalRewardPoints;
     public static int catalyticRewardPoints;
     public static GotrState state;
-    static GotrConfig config;
+    public static GotrConfig config;
+    public static GotrConfig enabled;
+    public static GotrConfig air;
+    public static GotrConfig water;
+    public static GotrConfig earth;
+    public static GotrConfig fire;
+    public static GotrConfig noBinding;
+    public static GotrConfig timeout;
+    public static GotrConfig runeType;
     String GUARDIAN_FRAGMENTS = "guardian fragments";
     String GUARDIAN_ESSENCE = "guardian essence";
 
@@ -104,6 +115,9 @@ public class GotrScript extends Script {
         guardianPortalInfo.put(ObjectID.GUARDIAN_OF_BLOOD, new GuardianPortalInfo("BLOOD", 77, ItemID.BLOOD_RUNE, 26894, 4364, RuneType.CATALYTIC, CellType.OVERCHARGED, Microbot.getClientThread().runOnClientThreadOptional(() -> Quest.SINS_OF_THE_FATHER.getState(Microbot.getClient())).orElse(null)));
     }
 
+    @Inject
+    private ConfigManager configManager;
+
     public boolean run(GotrConfig config) {
         this.config = config;
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
@@ -115,7 +129,7 @@ public class GotrScript extends Script {
                 if (!initCheck) {
                     initializeGuardianPortalInfo();
                     if (!Rs2Magic.isLunar()) {
-                        Microbot.log("Lunar spellbook not found...disabling npc contact");
+                        log("Lunar spellbook not found...disabling npc contact");
                         useNpcContact = false;
                     }
                     initCheck = true;
@@ -126,6 +140,22 @@ public class GotrScript extends Script {
                 if (!Rs2Inventory.hasItem("pickaxe") && !Rs2Equipment.isWearing("pickaxe")) {
                     log("You need to have a pickaxe before you can participate in this minigame.");
                     return;
+                }
+
+                if (Rs2Inventory.hasItem(ItemID.BINDING_NECKLACE)) {
+                    Rs2Inventory.wear(ItemID.BINDING_NECKLACE);
+                    sleepUntil(() -> Rs2Equipment.isWearing(ItemID.BINDING_NECKLACE), 2000);
+                }
+
+                if (!Rs2Inventory.hasItem("Binding necklace") && !Rs2Equipment.isWearing("Binding necklace")) {
+                    configManager.setConfiguration(config.configGroup, "noBinding", true);
+                } else {
+                    configManager.setConfiguration(config.configGroup, "noBinding", false);
+                }
+
+                if (BreakHandlerScript.breakIn <= 300) {
+                    BreakHandlerScript.setLockState(true);
+                    configManager.setConfiguration(config.configGroup, "timeout", true);
                 }
 
                 checkPouches(Rs2Inventory.anyPouchUnknown(), 1500, 300);
@@ -149,13 +179,11 @@ public class GotrScript extends Script {
 
                 boolean isInMinigame = !isOutsideBarrier() && isInMainRegion();
 
-
                 if (isInMinigame) {
 
                     if (lootChisel()) return;
 
                     if (waitingForGameToStart(timeToStart)) return;
-            
 
                     if (!Rs2Inventory.hasItem("Uncharged cell") && !isInLargeMine() && !isInHugeMine()) {
                         takeUnchargedCells();
@@ -168,7 +196,6 @@ public class GotrScript extends Script {
 
                     if (powerUpGreatGuardian()) return;
                     if (repairCells()) return;
-
 
                     if (!shouldMineGuardianRemains) {
                         //Create fragments into whatever
@@ -207,7 +234,6 @@ public class GotrScript extends Script {
                     return;
                 }
 
-
                 //IS NOT IN THE MINIGAME
 
                 if (craftRunes()) return;
@@ -216,13 +242,12 @@ public class GotrScript extends Script {
 
                 if (waitForMinigameToStart()) return;
 
-
                 long endTime = System.currentTimeMillis();
                 totalTime = endTime - startTime;
                 System.out.println("Total time for loop " + totalTime);
 
             } catch (Exception ex) {
-                Microbot.log("Something went wrong in the GOTR Script: " + ex.getMessage() + ". If the script is stuck, please contact us on discord with this log.");
+                log("Something went wrong in the GOTR Script: " + ex.getMessage() + ". If the script is stuck, please contact us on discord with this log.");
                 ex.printStackTrace();
             }
         }, 0, 100, TimeUnit.MILLISECONDS);
@@ -251,9 +276,9 @@ public class GotrScript extends Script {
             }
 
             repairPouches();
-    
+
             if (!shouldMineGuardianRemains) return true;
-    
+
             mineGuardianRemains();
             return true;
         }
@@ -271,7 +296,7 @@ public class GotrScript extends Script {
                     TileObject shieldCell = Rs2GameObject.getTileObject(shieldCellId);
                     if (shieldCell == null) continue;
                     if (CellType.GetShieldTier(shieldCell.getId()) < cellTier) {
-                        Microbot.log("Upgrading power cell at " + shieldCell.getWorldLocation());
+                        log("Upgrading power cell at " + shieldCell.getWorldLocation());
                         Rs2GameObject.interact(shieldCell, "Place-cell");
                         sleepUntil(() -> !Rs2Player.isMoving());
                         return true;
@@ -302,14 +327,13 @@ public class GotrScript extends Script {
         return false;
     }
 
-
     private void takeUnchargedCells() {
 
         if (!Rs2Inventory.hasItem("Uncharged cell")) {
             // Drop one guardian essence if inventory is full
             if (Rs2Inventory.isFull()) {
                 if (Rs2Inventory.drop(ItemID.GUARDIAN_ESSENCE)) {
-                    Microbot.log("Dropped one Guardian essence to make space for Uncharged cell");
+                    log("Dropped one Guardian essence to make space for Uncharged cell");
                 }
             }
 
@@ -444,7 +468,8 @@ public class GotrScript extends Script {
         return false;
     }
 
-    private static boolean waitForMinigameToStart() {
+    private boolean waitForMinigameToStart() {
+
         if (!isInMainRegion()) {
             TileObject rcPortal = findPortalToLeaveAltar();
             if (rcPortal != null && Rs2GameObject.interact(rcPortal.getId())) {
@@ -452,6 +477,14 @@ public class GotrScript extends Script {
                 return true;
             }
         }
+
+        if (config.noBinding() || config.timeout()) {
+            if (!onBankRun()) {
+                sleepGaussian(1200, 150);
+                return true;
+            }
+        }
+
         resetPlugin();
         if (state != GotrState.WAITING) {
             state = GotrState.WAITING;
@@ -461,7 +494,15 @@ public class GotrScript extends Script {
         return state == GotrState.WAITING;
     }
 
-    private static boolean enterMinigame() {
+
+    private boolean enterMinigame() {
+        if (config.noBinding() || config.timeout()) {
+            if (!onBankRun()) {
+                sleepGaussian(1200, 150);
+                return false;
+            }
+        }
+
         if (Rs2GameObject.interact(ObjectID.BARRIER_43700, "quick-pass")) {
             Rs2Player.waitForWalking();
             state = GotrState.ENTER_GAME;
@@ -513,6 +554,12 @@ public class GotrScript extends Script {
     }
 
     private void mineGuardianRemains() {
+        if (((getGuardiansPower() == 100) || (getGuardiansPower() == 0)) && (config.timeout() || config.noBinding())) {
+            if (!onBankRun()) {
+                sleepGaussian(1200, 150);
+                return;
+            }
+        }
         if (Microbot.getClient().hasHintArrow())
             return;
         if (Rs2Inventory.isFull()) {
@@ -574,7 +621,6 @@ public class GotrScript extends Script {
         Rs2GameObject.interact(38044);
         log("Leave huge mine...");
         Global.sleepUntil(() -> !isInHugeMine(), 5000);
-
     }
 
     private static boolean repairPouches() {
@@ -601,13 +647,12 @@ public class GotrScript extends Script {
         if (!Rs2Npc.canWalkTo(pouchRepairNpc, 10)) return;
         if (!Rs2Npc.interact(pouchRepairNpc, "Repair")) return;
 
-        Microbot.log("Repairing pouches...");
+        log("Repairing pouches...");
 
         Global.sleepUntil(() -> {
             Rs2Dialogue.clickContinue();
             return !Rs2Inventory.hasDegradedPouch();
         }, 10000);
-
     }
 
     @Override
@@ -679,14 +724,13 @@ public class GotrScript extends Script {
         }
         int firstPortalTimeAdjustment = isFirstPortal ? 40 : 0;
         return timeSincePortal.map(instant -> (int) ChronoUnit.SECONDS.between(instant, Instant.now())-firstPortalTimeAdjustment).orElse(-1);
-
     }
 
     public static List<GameObject> getAvailableAltars() {
         int elementalPoints = Microbot.getVarbitValue(13686);
         int catalyticPoints = Microbot.getVarbitValue(13685);
-        if (config.Mode() == Mode.BALANCED) {
-            Microbot.log(elementalPoints < catalyticPoints ? "We have " + elementalPoints + " elemental points, looking for elemental altar..." : "We have " + catalyticPoints +" catalytic points, looking for catalytic altar...");
+        if (config.Mode().equals(Mode.BALANCED)) {
+            log(elementalPoints < catalyticPoints ? "We have " + elementalPoints + " elemental points, looking for elemental altar..." : "We have " + catalyticPoints +" catalytic points, looking for catalytic altar...");
         }
         return Rs2GameObject.getGameObjects().stream()
                 .filter(x -> {
@@ -744,5 +788,77 @@ public class GotrScript extends Script {
                 ObjectID.PORTAL_34753, ObjectID.PORTAL_34754, ObjectID.PORTAL_34755, ObjectID.PORTAL_34756, ObjectID.PORTAL_34757, ObjectID.PORTAL_34758,
                 ObjectID.PORTAL_34758, ObjectID.PORTAL_34759, ObjectID.PORTAL_43478};
         return Rs2GameObject.findObject(altarIds);
+    }
+
+    public boolean onBankRun() {
+        System.out.println("switching to BANKING state.");
+        state = GotrState.BANKING;
+
+        if (!isInMainRegion()) {
+            TileObject rcPortal = findPortalToLeaveAltar();
+            if (rcPortal != null && Rs2GameObject.interact(rcPortal.getId())) {
+                state = GotrState.LEAVING_ALTAR;
+                return false;
+            }
+        }
+
+        if (isInHugeMine()) {
+            leaveHugeMine();
+            return false;
+        }
+
+        if (isInLargeMine()) {
+            leaveLargeMine();
+            return false;
+        }
+
+        if (!isOutsideBarrier()) {
+            if (Rs2GameObject.interact(ObjectID.BARRIER_43700, "quick-pass")) {
+                Rs2Player.waitForWalking();
+                return false;
+            }
+        }
+
+        if (!config.enabled()) {
+            if (config.timeout()) {
+                configManager.setConfiguration(config.configGroup, "timeout", false);
+                BreakHandlerScript.setLockState(false);
+                BreakHandlerScript.breakIn = 0;
+            }
+            return true;
+        }
+
+        if (Rs2Equipment.isWearing(ItemID.BINDING_NECKLACE)) {
+            configManager.setConfiguration(config.configGroup, "noBinding", false);
+            if (config.timeout()) {
+                configManager.setConfiguration(config.configGroup, "timeout", false);
+                BreakHandlerScript.setLockState(false);
+                BreakHandlerScript.breakIn = 0;
+                sleepGaussian(1200, 150);
+            }
+            return true;
+        }
+
+        if (Rs2Inventory.hasItemAmount(ItemID.BINDING_NECKLACE, 1)) {
+            Rs2Inventory.wear(ItemID.BINDING_NECKLACE);
+            sleepUntil(() -> Rs2Equipment.isWearing(ItemID.BINDING_NECKLACE), 2000);
+            return false;
+        }
+
+        if (isOutsideBarrier()) {
+            Rs2Bank.walkToBank();
+            Rs2Player.waitForWalking();
+            Rs2Bank.openBank();
+            sleepUntil(Rs2Bank::isOpen);
+            if (Rs2Bank.hasBankItem(ItemID.BINDING_NECKLACE, 2)) {
+                Rs2Bank.withdrawX(true, ItemID.BINDING_NECKLACE, 2);
+                Rs2Inventory.waitForInventoryChanges(1200);
+                Rs2Bank.closeBank();
+            } else {
+                configManager.setConfiguration(config.configGroup, "enabled", false);
+                return false;
+            }
+        }
+        return true;
     }
 }
