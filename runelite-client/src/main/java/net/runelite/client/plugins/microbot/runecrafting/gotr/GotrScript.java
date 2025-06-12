@@ -600,7 +600,7 @@ public class GotrScript extends Script {
                     }
 //                    checkPouches(Rs2Random.between(1, 20) == 2, Rs2Random.between(100, 600), Rs2Random.between(100, 300));
 
-                    repairPouches();
+//                    repairPouches();
                     Rs2GameObject.interact(ObjectID.LARGE_GUARDIAN_REMAINS);
                     sleepGaussian(1200, 150);
                 }
@@ -614,7 +614,7 @@ public class GotrScript extends Script {
                 if (Rs2Equipment.isWearing("dragon pickaxe")) {
                     Rs2Combat.setSpecState(true, 1000);
                 }
-                repairPouches();
+//                repairPouches();
                 Rs2GameObject.interact(ObjectID.GUARDIAN_PARTS_43716);
                 sleepGaussian(1200, 150);
                 // we can assume that if the player is mining within the startTimer range, he will get enough guardian remains for the game
@@ -782,11 +782,66 @@ public class GotrScript extends Script {
         Microbot.getClient().clearHintArrow();
     }
 
-    public static TileObject findRcAltar() {
+//    public static TileObject findRcAltar() {
+//        Integer[] altarIds = new Integer[] {ObjectID.ALTAR_34760, ObjectID.ALTAR_34761, ObjectID.ALTAR_34762, ObjectID.ALTAR_34763, ObjectID.ALTAR_34764,
+//                ObjectID.ALTAR_34765, ObjectID.ALTAR_34766, ObjectID.ALTAR_34767, ObjectID.ALTAR_34768, ObjectID.ALTAR_34769, ObjectID.ALTAR_34770,
+//                ObjectID.ALTAR_34771, ObjectID.ALTAR_34772, ObjectID.ALTAR_43479};
+//        return Rs2GameObject.findObject(altarIds);
+//    }
+
+    public TileObject findRcAltar() {
+
         Integer[] altarIds = new Integer[] {ObjectID.ALTAR_34760, ObjectID.ALTAR_34761, ObjectID.ALTAR_34762, ObjectID.ALTAR_34763, ObjectID.ALTAR_34764,
                 ObjectID.ALTAR_34765, ObjectID.ALTAR_34766, ObjectID.ALTAR_34767, ObjectID.ALTAR_34768, ObjectID.ALTAR_34769, ObjectID.ALTAR_34770,
                 ObjectID.ALTAR_34771, ObjectID.ALTAR_34772, ObjectID.ALTAR_43479};
-        return Rs2GameObject.findObject(altarIds);
+        GameObject currentAltar = Rs2GameObject.findObject(altarIds);
+        if (currentAltar == null) {
+            return null;
+        }
+        int altarID = currentAltar.getId();
+
+        switch (altarID) {
+            case ObjectID.ALTAR_34760: // air
+                configManager.setConfiguration(config.configGroup, "runeType", RuneType.ELEMENTAL);
+                List<String> airElements = List.of("water", "fire", "earth");
+                for (String key : airElements) {
+                    configManager.setConfiguration(config.configGroup, key, true);
+                }
+                configManager.setConfiguration(config.configGroup, "air", false);
+                break;
+            case ObjectID.ALTAR_34762: // water
+                configManager.setConfiguration(config.configGroup, "runeType", RuneType.ELEMENTAL);
+                List<String> waterElements = List.of("air", "fire", "earth");
+                for (String key : waterElements) {
+                    configManager.setConfiguration(config.configGroup, key, true);
+                }
+                configManager.setConfiguration(config.configGroup, "water", false);
+                break;
+            case ObjectID.ALTAR_34763: // earth
+                configManager.setConfiguration(config.configGroup, "runeType", RuneType.ELEMENTAL);
+                List<String> earthElements = List.of("water", "fire", "air");
+                for (String key : earthElements) {
+                    configManager.setConfiguration(config.configGroup, key, true);
+                }
+                configManager.setConfiguration(config.configGroup, "earth", false);
+                break;
+            case ObjectID.ALTAR_34764: // fire
+                configManager.setConfiguration(config.configGroup, "runeType", RuneType.ELEMENTAL);
+                List<String> fireElements = List.of("water", "air", "earth");
+                for (String key : fireElements) {
+                    configManager.setConfiguration(config.configGroup, key, true);
+                }
+                configManager.setConfiguration(config.configGroup, "fire", false);
+                break;
+            default:
+                configManager.setConfiguration(config.configGroup, "runeType", RuneType.CATALYTIC);
+                List<String> catalyticElements = List.of("air", "water", "fire", "earth");
+                for (String key : catalyticElements) {
+                    configManager.setConfiguration(config.configGroup, key, false);
+                }
+                break;
+        }
+        return currentAltar;
     }
 
     public static TileObject findPortalToLeaveAltar() {

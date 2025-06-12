@@ -1,5 +1,6 @@
 package net.runelite.client.plugins.microbot.runecrafting.gotr;
 
+import net.runelite.api.ItemID;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigInformation;
@@ -8,6 +9,8 @@ import net.runelite.client.config.ConfigSection;
 import net.runelite.client.plugins.microbot.runecrafting.gotr.data.Mode;
 import net.runelite.client.plugins.microbot.runecrafting.gotr.data.Combination;
 import net.runelite.client.plugins.microbot.runecrafting.gotr.data.RuneType;
+
+import java.util.List;
 
 @ConfigGroup(GotrConfig.configGroup)
 @ConfigInformation("This plugin is in preview & only supports masses. <br /> The script will not create elemental guardians. <br /> Have fun and don't get banned! <br /> If using NPC Contact to repair pouches, make sure you have Abyssal book in your bank! <br /><br /> <b>NB</b> NPC Contact pouch repair doesn't seem to work; pay Apprentice Cordelia 25 abyssal pearls and have some in your inventory for smooth sailing. ")
@@ -28,6 +31,7 @@ public interface GotrConfig extends Config {
     String noBinding = "noBinding";
     String timeout = "timeout";
     String runeType = "runeType";
+    String allowedRunes = "allowedRunes";
 
     @ConfigSection(
             name = "General",
@@ -111,42 +115,6 @@ public interface GotrConfig extends Config {
     default Combination rune() {return Combination.MIST;}
 
     @ConfigItem(
-            keyName = air,
-            name = "Air runes?",
-            description = "use air runes for combination?",
-            position = 2,
-            section = combinationSection
-    )
-    default boolean air() { return false; }
-
-    @ConfigItem(
-            keyName = water,
-            name = "Water runes?",
-            description = "use water runes for combination?",
-            position = 3,
-            section = combinationSection
-    )
-    default boolean water() { return false; }
-
-    @ConfigItem(
-            keyName = earth,
-            name = "Earth runes?",
-            description = "use earth runes for combination?",
-            position = 4,
-            section = combinationSection
-    )
-    default boolean earth() { return false; }
-
-    @ConfigItem(
-            keyName = fire,
-            name = "Fire runes?",
-            description = "use fire runes for combination?",
-            position = 5,
-            section = combinationSection
-    )
-    default boolean fire() { return false; }
-
-    @ConfigItem(
             keyName = noBinding,
             name = "noBinding",
             description = "needs to bank?",
@@ -173,4 +141,39 @@ public interface GotrConfig extends Config {
     )
     default RuneType runeType() { return RuneType.ELEMENTAL; }
 
+    @ConfigItem(
+            keyName = air,
+            name = "Air runes combinable?",
+            description = "use air runes for combination?",
+            position = 3,
+            section = debugSection
+    )
+    default boolean air() { return false; }
+
+    @ConfigItem(
+            keyName = water,
+            name = "Water runes combinable?",
+            description = "use water runes for combination?",
+            position = 4,
+            section = debugSection
+    )
+    default boolean water() { return false; }
+
+    @ConfigItem(
+            keyName = earth,
+            name = "Earth runes combinable?",
+            description = "use earth runes for combination?",
+            position = 5,
+            section = debugSection
+    )
+    default boolean earth() { return false; }
+
+    @ConfigItem(
+            keyName = fire,
+            name = "Fire runes combinable?",
+            description = "use fire runes for combination?",
+            position = 6,
+            section = debugSection
+    )
+    default boolean fire() { return false; }
 }
