@@ -1,6 +1,5 @@
 package net.runelite.client.plugins.microbot.runecrafting.gotr;
 
-import net.runelite.api.ItemID;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigInformation;
@@ -8,9 +7,6 @@ import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
 import net.runelite.client.plugins.microbot.runecrafting.gotr.data.Mode;
 import net.runelite.client.plugins.microbot.runecrafting.gotr.data.Combination;
-import net.runelite.client.plugins.microbot.runecrafting.gotr.data.RuneType;
-
-import java.util.List;
 
 @ConfigGroup(GotrConfig.configGroup)
 @ConfigInformation("This plugin is in preview & only supports masses. <br /> The script will not create elemental guardians. <br /> Have fun and don't get banned! <br /> If using NPC Contact to repair pouches, make sure you have Abyssal book in your bank! <br /><br /> <b>NB</b> NPC Contact pouch repair doesn't seem to work; pay Apprentice Cordelia 25 abyssal pearls and have some in your inventory for smooth sailing. ")
@@ -30,7 +26,7 @@ public interface GotrConfig extends Config {
     String fire = "fire";
     String noBinding = "noBinding";
     String timeout = "timeout";
-    String runeType = "runeType";
+    String elemental = "elemental";
     String allowedRunes = "allowedRunes";
 
     @ConfigSection(
@@ -133,13 +129,13 @@ public interface GotrConfig extends Config {
     default boolean timeout() { return false; }
 
     @ConfigItem(
-            keyName = runeType,
-            name = "RuneType",
-            description = "Type of RuneType",
+            keyName = elemental,
+            name = "Elemental",
+            description = "is rune Elemental?",
             position = 2,
             section = debugSection
     )
-    default RuneType runeType() { return RuneType.ELEMENTAL; }
+    default boolean elemental() { return false; }
 
     @ConfigItem(
             keyName = air,

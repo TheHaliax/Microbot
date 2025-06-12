@@ -41,5 +41,4 @@ public enum Combination {
     public static Set<Integer> getIds() {
         return Arrays.stream(values()).map(Combination::getId).collect(Collectors.toSet());
     }
-
 }
