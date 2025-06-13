@@ -160,7 +160,7 @@ public class GotrScript extends Script {
                 if (!pouchCheck) {
                     Rs2Inventory.checkPouches();
                     sleep(Rs2Random.randomGaussian(1500, 300));
-                    pouchCheck = false;
+                    pouchCheck = true;
                 }
 
                 Rs2Walker.setTarget(null);
