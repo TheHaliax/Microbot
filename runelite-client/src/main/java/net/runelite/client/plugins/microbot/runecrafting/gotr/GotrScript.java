@@ -434,7 +434,7 @@ public class GotrScript extends Script {
     }
 
     private boolean isOutOfFragments() {
-        if ((!Rs2Inventory.hasItem(GUARDIAN_FRAGMENTS) && !Rs2Inventory.isFull()) || usePortal()) {
+        if (!Rs2Inventory.hasItem(GUARDIAN_FRAGMENTS)) {
             shouldMineGuardianRemains = true;
             if(!Rs2Inventory.hasItem(GUARDIAN_FRAGMENTS))
                 log("Memorize that we no longer have guardian fragments...");
@@ -613,7 +613,6 @@ public class GotrScript extends Script {
         if (((getGuardiansPower() == 100) || (getGuardiansPower() == 0)) && ((config.timeout() || (config.enabled() && config.noBinding())))) {
             if (!onBankRun()) {
                 sleepGaussian(1200, 150);
-                return;
             }
         }
         if (Microbot.getClient().hasHintArrow())
