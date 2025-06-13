@@ -731,6 +731,7 @@ public class GotrScript extends Script {
         if (isInHugeMine()) {
             Rs2GameObject.interact(ObjectID.HUGE_GUARDIAN_REMAINS);
             Global.sleepUntil(() -> !Rs2Player.isAnimating(), 5000);
+
             if (getGuardiansPower() == 0) {
                 pouchCheck = false;
                 repairPouches();
@@ -738,22 +739,24 @@ public class GotrScript extends Script {
                 optimizedEssenceLoop = false;
                 return false;
             }
+
             if (Rs2Inventory.isFull() && Rs2Inventory.anyPouchFull()) {
                 pouchCheck = false;
                 leaveHugeMine();
                 optimizedEssenceLoop = false;
                 return false;
-            }else if (!Rs2Player.isAnimating()) {
-                    if (Rs2Inventory.anyPouchEmpty()) {
-                        Rs2Inventory.fillPouches();
-                        pouchesFilled = true;
-                        return false;
-                    } else
-                        pouchesFilled = true;
-                        return true;
+            } else if (!Rs2Player.isAnimating()) {
+                if (Rs2Inventory.anyPouchEmpty()) {
+                    Rs2Inventory.fillPouches();
+                    pouchesFilled = true;
+                    return false;
+                } else {
+                    pouchesFilled = true;
+                    return true;
                 }
-
             }
+        }
+
         return false;
     }
 
