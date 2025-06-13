@@ -115,6 +115,7 @@ public class GotrScript extends Script {
             ItemID.MIST_RUNE,
             ItemID.MUD_RUNE,
             ItemID.WRATH_RUNE);
+    private boolean pouchCheck;
 
     private void initializeGuardianPortalInfo() {
         guardianPortalInfo.put(ObjectID.GUARDIAN_OF_AIR, new GuardianPortalInfo("AIR", 1, ItemID.AIR_RUNE, 26887, 4353, RuneType.ELEMENTAL, CellType.WEAK, QuestState.FINISHED));
@@ -156,6 +157,12 @@ public class GotrScript extends Script {
                     initCheck = true;
                 }
 
+                if (!pouchCheck) {
+                    Rs2Inventory.checkPouches();
+                    sleep(Rs2Random.randomGaussian(1500, 300));
+                    pouchCheck = false;
+                }
+
                 Rs2Walker.setTarget(null);
 
                 if (!Rs2Inventory.hasItem("pickaxe") && !Rs2Equipment.isWearing("pickaxe")) {
@@ -168,24 +175,12 @@ public class GotrScript extends Script {
                     sleepUntil(() -> Rs2Equipment.isWearing(ItemID.BINDING_NECKLACE), 2000);
                 }
 
-                if (!Rs2Inventory.hasItem(ItemID.BINDING_NECKLACE) && !Rs2Equipment.isWearing(ItemID.BINDING_NECKLACE)) {
-                    noBind = true;
-                } else {
-                    noBind = false;
-                }
+                noBind = !Rs2Inventory.hasItem(ItemID.BINDING_NECKLACE) && !Rs2Equipment.isWearing(ItemID.BINDING_NECKLACE);
 
                 if (BreakHandlerScript.breakIn <= 300) {
                     BreakHandlerScript.setLockState(true);
                     timeout = true;
                 }
-
-                if (Rs2Inventory.anyPouchUnknown()) {
-                    Rs2Inventory.checkPouches();
-                    sleep(Rs2Random.randomGaussian(1500, 300));
-                    return; // bail from this loop iteration to avoid repeating logic on unknown state
-                }
-
-
 
                 //IS INSIDE THE MINIGAME
                 int timeToStart = 0;
@@ -233,9 +228,6 @@ public class GotrScript extends Script {
                                 needsDeposit = false;
                             }
                         }
-
-                        //deposit runes
-//                        if (depositRunesIntoPool()) return;
 
                         if (!Rs2Inventory.isFull() && !optimizedEssenceLoop) {
                             if (leaveLargeMine()) return;
@@ -382,7 +374,7 @@ public class GotrScript extends Script {
             Rs2GameObject.interact(Microbot.getClient().getHintArrowPoint());
             log("Found a portal spawn...interacting with it...");
             Rs2Player.waitForWalking();
-            sleepUntil(() -> isInHugeMine());
+            sleepUntil(this::isInHugeMine);
             sleepUntil(() -> getGuardiansPower() > 0);
             return true;
         }
@@ -734,12 +726,14 @@ public class GotrScript extends Script {
             Rs2GameObject.interact(ObjectID.HUGE_GUARDIAN_REMAINS);
             Global.sleepUntil(() -> !Rs2Player.isAnimating(), 5000);
             if (getGuardiansPower() == 0) {
+                pouchCheck = false;
                 repairPouches();
                 leaveHugeMine();
                 optimizedEssenceLoop = false;
                 return false;
             }
             if (Rs2Inventory.isFull() && Rs2Inventory.anyPouchFull()) {
+                pouchCheck = false;
                 leaveHugeMine();
                 optimizedEssenceLoop = false;
                 return false;
@@ -749,6 +743,7 @@ public class GotrScript extends Script {
                         pouchesFilled = true;
                         return false;
                     } else
+                        pouchesFilled = true;
                         return true;
                 }
 
