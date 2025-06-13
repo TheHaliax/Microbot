@@ -161,6 +161,14 @@ public class GotrScript extends Script {
                     return; // bail from this loop iteration to avoid repeating logic on unknown state
                 }
 
+                if (!Rs2Player.isAnimating()) {
+                    if (!Rs2Inventory.allPouchesFull()) {
+                        Rs2Inventory.fillPouches();
+                    } else if ((!Rs2Inventory.allPouchesFull()) && Rs2Inventory.isFull()) {
+                        if (!enterAltar()) return;
+                    }
+                }
+
                 //IS INSIDE THE MINIGAME
                 int timeToStart = 0;
                 if (nextGameStart.isPresent()) {
@@ -441,7 +449,6 @@ public class GotrScript extends Script {
 
             return true;
         }
-        shouldMineGuardianRemains = false;
         return false;
     }
 
