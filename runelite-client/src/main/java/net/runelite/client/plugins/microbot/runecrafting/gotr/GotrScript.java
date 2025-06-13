@@ -61,7 +61,7 @@ public class GotrScript extends Script {
     public static int elementalRewardPoints;
     public static int catalyticRewardPoints;
     public static GotrState state;
-    public static GotrConfig config;;
+    public static GotrConfig config;
     String GUARDIAN_FRAGMENTS = "guardian fragments";
     String GUARDIAN_ESSENCE = "guardian essence";
 

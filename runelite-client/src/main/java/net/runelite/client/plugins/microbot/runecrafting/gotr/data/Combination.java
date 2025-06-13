@@ -9,16 +9,15 @@ import java.util.stream.Collectors;
 
 @Getter
 public enum Combination {
-    // Format: (id, lvl, name, itemId)
-    NONE(0, 0, null, 0),
-    MIST(15, 6, "Mist rune", ItemID.MIST_RUNE),
-    MUD(16, 13, "Mud rune", ItemID.MUD_RUNE),
-    DUST(17, 10, "Dust rune", ItemID.DUST_RUNE),
-    LAVA(18, 23, "Lava rune", ItemID.LAVA_RUNE),
-    STEAM(19, 19, "Steam rune", ItemID.STEAM_RUNE),
-    SMOKE(20, 15, "Smoke rune", ItemID.SMOKE_RUNE),
-    AETHER(21, 25, "Aether rune", ItemID.AETHER_RUNE),
-    ALL(-1, 23, "All", 0);
+    // Format: (id, lvl, name, ItemID)
+    NONE(-1, 0, "None"),
+    MIST(15, 6, "Mist rune"),
+    MUD(16, 13, "Mud rune"),
+    DUST(17, 10, "Dust rune"),
+    LAVA(18, 23, "Lava rune"),
+    STEAM(19, 19, "Steam rune"),
+    SMOKE(20, 15, "Smoke rune"),
+    ALL(-1, 23, "All");
 
     private final int id;
     private final int lvl;
@@ -34,6 +33,12 @@ public enum Combination {
 
     @Override
     public String toString() {
+        if (this == NONE) {
+            return "None";
+        }
+        if (this == ALL) {
+            return "All";
+        }
         return name + " (" + getlvl() + ")";
     }
 
