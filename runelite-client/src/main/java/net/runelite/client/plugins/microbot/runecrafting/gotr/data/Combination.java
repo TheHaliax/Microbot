@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 @Getter
 public enum Combination {
     // Format: (id, lvl, name, ItemID)
+    NONE(-1, 0, "None"),
     MIST(15, 6, "Mist rune"),
     MUD(16, 13, "Mud rune"),
     DUST(17, 10, "Dust rune"),
@@ -30,6 +31,12 @@ public enum Combination {
 
     @Override
     public String toString() {
+        if (this == NONE) {
+            return "None";
+        }
+        if (this == ALL) {
+            return "All";
+        }
         return name + " (" + getlvl() + ")";
     }
 
@@ -41,4 +48,25 @@ public enum Combination {
     public static Set<Integer> getIds() {
         return Arrays.stream(values()).map(Combination::getId).collect(Collectors.toSet());
     }
+}
+
+enum Elemental {
+    AIR,
+    WATER,
+    EARTH,
+    FIRE
+}
+
+enum Catalytic {
+    MIND,
+    BODY,
+    COSMIC,
+    CHAOS,
+    ASTRAL,
+    NATURE,
+    LAW,
+    DEATH,
+    BLOOD,
+    SOUL,
+    WRATH
 }
