@@ -539,11 +539,10 @@ public class GotrScript extends Script {
 
     private boolean craftRunes() {
         Integer runeId = finalRune(config.rune());
-        Integer[] altarIds = new Integer[] {ObjectID.ALTAR_34760, ObjectID.ALTAR_34761, ObjectID.ALTAR_34762,
-                ObjectID.ALTAR_34763, ObjectID.ALTAR_34764, ObjectID.ALTAR_34765, ObjectID.ALTAR_34766,
-                ObjectID.ALTAR_34767, ObjectID.ALTAR_34768, ObjectID.ALTAR_34769, ObjectID.ALTAR_34770,
+        Integer[] altarIds = new Integer[] {ObjectID.ALTAR_34760, ObjectID.ALTAR_34761, ObjectID.ALTAR_34762, ObjectID.ALTAR_34763, ObjectID.ALTAR_34764,
+                ObjectID.ALTAR_34765, ObjectID.ALTAR_34766, ObjectID.ALTAR_34767, ObjectID.ALTAR_34768, ObjectID.ALTAR_34769, ObjectID.ALTAR_34770,
                 ObjectID.ALTAR_34771, ObjectID.ALTAR_34772, ObjectID.ALTAR_43479};
-        TileObject rcAltar = Rs2GameObject.findObject(altarIds);
+        GameObject rcAltar = Rs2GameObject.findObject(altarIds);
         if (rcAltar != null) {
             int altarID = rcAltar.getId();
             switch (altarID) {
