@@ -78,7 +78,7 @@ public class GotrScript extends Script {
     String GUARDIAN_ESSENCE = "guardian essence";
 
     boolean initCheck = false;
-    boolean optimizedEssenceLoop = false;
+    public static boolean optimizedEssenceLoop = false;
     boolean noBind = false;
     boolean timeout = false;
     boolean elemental = false;
@@ -245,8 +245,8 @@ public class GotrScript extends Script {
                             if (craftGuardianEssences()) return;
 
                         } else if (Rs2Inventory.hasItem(GUARDIAN_ESSENCE)) {
-                            if (leaveLargeMine()) return;
                             if (enterAltar()) return;
+                            if (leaveLargeMine()) return;
                         }
                     } else {
                         handleMining();
@@ -474,13 +474,15 @@ public class GotrScript extends Script {
             state = GotrState.CRAFT_GUARDIAN_ESSENCE;
             sleep(Rs2Random.randomGaussian(Rs2Random.between(600, 900), Rs2Random.between(150, 300)));
             log("Crafting guardian essences...");
-
-            // ensure pouches are filled after crafting to free inventory space
-            if (Rs2Inventory.anyPouchEmpty()) {
-                Rs2Inventory.fillPouches();
-                pouchesFilled = true;
+            if (!Rs2Player.isAnimating()) {
+                // ensure pouches are filled after crafting to free inventory space
+                if (Rs2Inventory.anyPouchEmpty()) {
+                    Rs2Inventory.fillPouches();
+                    pouchesFilled = true;
+                }
+                return true;
             }
-            return true;
+            return false;
         }
        return false;
     }
@@ -729,36 +731,28 @@ public class GotrScript extends Script {
 
     private boolean mineHugeGuardianRemain() {
         if (isInHugeMine()) {
+            Rs2GameObject.interact(ObjectID.HUGE_GUARDIAN_REMAINS);
+            Global.sleepUntil(() -> !Rs2Player.isAnimating(), 5000);
             if (getGuardiansPower() == 0) {
                 repairPouches();
                 leaveHugeMine();
                 optimizedEssenceLoop = false;
                 return false;
             }
-            if (!Rs2Inventory.isFull()) {
-                if (!Rs2Player.isAnimating()) {
-                    Rs2GameObject.interact(ObjectID.HUGE_GUARDIAN_REMAINS);
-                    Rs2Player.waitForAnimation();
-                    if (!Rs2Player.isAnimating())
-                        Rs2GameObject.interact(ObjectID.HUGE_GUARDIAN_REMAINS);
+            if (Rs2Inventory.isFull() && Rs2Inventory.anyPouchFull()) {
+                leaveHugeMine();
+                optimizedEssenceLoop = false;
+                return false;
+            }else if (!Rs2Player.isAnimating()) {
+                    if (Rs2Inventory.anyPouchEmpty()) {
+                        Rs2Inventory.fillPouches();
+                        pouchesFilled = true;
+                        return false;
+                    } else
+                        return true;
                 }
-            } else {
-                if (Rs2Inventory.allPouchesFull()) {
-                    if (Rs2Inventory.hasItem("guardian stone")) {
-                        optimizedEssenceLoop = true;
-                    }
-                    leaveHugeMine();
-                } else {
-                    if (fillPouches()) {
-                        // if inventory was freed by filling pouches, resume mining
-                        if (!Rs2Inventory.isFull()) {
-                            Rs2GameObject.interact(ObjectID.HUGE_GUARDIAN_REMAINS);
-                        }
-                    }
-                }
+
             }
-            return true;
-        }
         return false;
     }
 
