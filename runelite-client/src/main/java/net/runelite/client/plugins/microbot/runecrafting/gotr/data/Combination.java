@@ -22,13 +22,11 @@ public enum Combination {
     private final int id;
     private final int lvl;
     private final String name;
-    private final int itemId;
 
-    Combination(int id, int lvl, String name, int itemId) {
+    Combination(int id, int lvl, String name) {
         this.id = id;
         this.lvl = lvl;
         this.name = name;
-        this.itemId = itemId;
     }
 
     @Override
@@ -52,71 +50,3 @@ public enum Combination {
     }
 }
 
-@Getter
-public enum Elemental {
-    AIR(22, 1, "Air rune", ItemID.AIR_RUNE),
-    WATER(23, 5, "Water rune", ItemID.WATER_RUNE),
-    EARTH(24, 9, "Earth rune", ItemID.EARTH_RUNE),
-    FIRE(25, 14, "Fire rune", ItemID.FIRE_RUNE);
-
-    private final int id;
-    private final int lvl;
-    private final String name;
-    private final int itemId;
-
-    Elemental(int id, int lvl, String name, int itemId) {
-        this.id = id;
-        this.lvl = lvl;
-        this.name = name;
-        this.itemId = itemId;
-    }
-
-    @Override
-    public String toString() {
-        return name + " (" + getlvl() + ", " + getItemId() + ")";
-    }
-
-    public int getlvl() {
-        return lvl;
-    }
-
-    public static Set<Integer> getIds() {
-        return Arrays.stream(values()).map(Elemental::getId).collect(Collectors.toSet());
-    }
-}
-
-@Getter
-public enum Catalytic {
-    MIND(26, 2, "Mind rune", ItemID.MIND_RUNE),
-    BODY(27, 20, "Body rune", ItemID.BODY_RUNE),
-    COSMIC(28, 27, "Cosmic rune", ItemID.COSMIC_RUNE),
-    NATURE(29, 44, "Nature rune", ItemID.NATURE_RUNE),
-    LAW(30, 54, "Law rune", ItemID.LAW_RUNE),
-    DEATH(31, 65, "Death rune", ItemID.DEATH_RUNE),
-    BLOOD(32, 77, "Blood rune", ItemID.BLOOD_RUNE);
-
-    private final int id;
-    private final int lvl;
-    private final String name;
-    private final int itemId;
-
-    Catalytic(int id, int lvl, String name, int itemId) {
-        this.id = id;
-        this.lvl = lvl;
-        this.name = name;
-        this.itemId = itemId;
-    }
-
-    @Override
-    public String toString() {
-        return name + " (" + getlvl() + ", " + getItemId() + ")";
-    }
-
-    public int getlvl() {
-        return lvl;
-    }
-
-    public static Set<Integer> getIds() {
-        return Arrays.stream(values()).map(Catalytic::getId).collect(Collectors.toSet());
-    }
-}
