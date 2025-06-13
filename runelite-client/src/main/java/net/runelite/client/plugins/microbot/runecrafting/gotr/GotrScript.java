@@ -237,10 +237,6 @@ public class GotrScript extends Script {
                         //deposit runes
 //                        if (depositRunesIntoPool()) return;
 
-                        if (fillPouches()) {
-                            craftGuardianEssences();
-                            return;
-                        }
                         if (!Rs2Inventory.isFull() && !optimizedEssenceLoop) {
                             if (leaveLargeMine()) return;
 
@@ -253,16 +249,7 @@ public class GotrScript extends Script {
                             if (enterAltar()) return;
                         }
                     } else {
-                        if (getGuardiansPower() > 70) {
-                            if (Rs2Inventory.hasItemAmount(GUARDIAN_FRAGMENTS, Rs2Random.between(Rs2Inventory.getEmptySlots()+Rs2Inventory.getRemainingCapacityInPouches(), Rs2Inventory.getEmptySlots()+Rs2Inventory.getRemainingCapacityInPouches()+3))) {
-                                shouldMineGuardianRemains = false;
-                            }
-                        } else {
-                            if (Rs2Inventory.hasItemAmount(GUARDIAN_FRAGMENTS, config.maxFragmentAmount())) {
-                                shouldMineGuardianRemains = false;
-                            }
-                        }
-                        mineGuardianRemains();
+                        handleMining();
                     }
                     return;
                 }
@@ -487,6 +474,12 @@ public class GotrScript extends Script {
             state = GotrState.CRAFT_GUARDIAN_ESSENCE;
             sleep(Rs2Random.randomGaussian(Rs2Random.between(600, 900), Rs2Random.between(150, 300)));
             log("Crafting guardian essences...");
+
+            // ensure pouches are filled after crafting to free inventory space
+            if (Rs2Inventory.anyPouchEmpty()) {
+                Rs2Inventory.fillPouches();
+                pouchesFilled = true;
+            }
             return true;
         }
        return false;
@@ -639,6 +632,7 @@ public class GotrScript extends Script {
                                 log("Leaving the altar...");
                                 sleepUntilTrue(GotrScript::isInMainRegion, 100, 10000);
                                 sleep(Rs2Random.randomGaussian(750, 150));
+                                pouchesFilled = false;
                             }
                         }
                         return true;
@@ -670,6 +664,7 @@ public class GotrScript extends Script {
                         log("Leaving the altar...");
                         sleepUntilTrue(GotrScript::isInMainRegion, 100, 10000);
                         sleep(Rs2Random.randomGaussian(750, 150));
+                        pouchesFilled = false;
                     }
                 }
                 return true;
@@ -685,6 +680,7 @@ public class GotrScript extends Script {
             TileObject rcPortal = findPortalToLeaveAltar();
             if (rcPortal != null && Rs2GameObject.interact(rcPortal.getId())) {
                 state = GotrState.LEAVING_ALTAR;
+                pouchesFilled = false;
                 return true;
             }
         }
@@ -824,6 +820,20 @@ public class GotrScript extends Script {
                 sleepGaussian(1200, 150);
             }
         }
+    }
+
+    private void handleMining() {
+        if (getGuardiansPower() > 70) {
+            if (Rs2Inventory.hasItemAmount(GUARDIAN_FRAGMENTS,
+                    Rs2Random.between(Rs2Inventory.getEmptySlots() + Rs2Inventory.getRemainingCapacityInPouches(),
+                            Rs2Inventory.getEmptySlots() + Rs2Inventory.getRemainingCapacityInPouches() + 3))) {
+                shouldMineGuardianRemains = false;
+            }
+        } else if (Rs2Inventory.hasItemAmount(GUARDIAN_FRAGMENTS, config.maxFragmentAmount())) {
+            shouldMineGuardianRemains = false;
+        }
+
+        mineGuardianRemains();
     }
 
     private void leaveHugeMine() {
