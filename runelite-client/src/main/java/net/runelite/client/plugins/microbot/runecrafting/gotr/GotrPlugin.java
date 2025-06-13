@@ -21,6 +21,8 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.regex.Matcher;
 
+import static net.runelite.client.plugins.microbot.runecrafting.gotr.GotrScript.optimizedEssenceLoop;
+
 @PluginDescriptor(
         name = PluginDescriptor.Mocrosoft + "GuardiansOfTheRift",
         description = "Guardians of the rift plugin",
@@ -139,6 +141,7 @@ public class GotrPlugin extends Plugin {
         }
 
         if (gameObject.getId() == GotrScript.portalId) {
+            optimizedEssenceLoop = true;
             Microbot.getClient().setHintArrow(gameObject.getWorldLocation());
             if(GotrScript.isFirstPortal) {
                 GotrScript.isFirstPortal = false;
