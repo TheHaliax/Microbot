@@ -544,6 +544,7 @@ public class GotrScript extends Script {
                 ObjectID.ALTAR_34767, ObjectID.ALTAR_34768, ObjectID.ALTAR_34769, ObjectID.ALTAR_34770,
                 ObjectID.ALTAR_34771, ObjectID.ALTAR_34772, ObjectID.ALTAR_43479};
         TileObject rcAltar = Rs2GameObject.findObject(altarIds);
+        if (rcAltar != null) {
             int altarID = rcAltar.getId();
             switch (altarID) {
                 case ObjectID.ALTAR_34760: // air
@@ -602,7 +603,6 @@ public class GotrScript extends Script {
                     fireAltar = false;
                     break;
             }
-        if (rcAltar != null) {
             if (runeId != null) {
                 if (config.rune() != Combination.NONE) {
                     if (!Rs2Inventory.hasItem(ItemID.AIR_RUNE) && !Rs2Inventory.hasItem(ItemID.WATER_RUNE) && !Rs2Inventory.hasItem(ItemID.EARTH_RUNE) && !Rs2Inventory.hasItem(ItemID.FIRE_RUNE)) {
