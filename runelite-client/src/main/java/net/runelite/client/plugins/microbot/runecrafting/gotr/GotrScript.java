@@ -416,12 +416,65 @@ public class GotrScript extends Script {
     }
 
     private boolean enterAltar() {
-        GameObject availableAltar = getAvailableAltars().stream().findFirst().orElse(null);
+        int elementalPoints = Microbot.getVarbitValue(13686);
+        int catalyticPoints = Microbot.getVarbitValue(13685);
+        if (config.Mode().equals(Mode.BALANCED)) {
+            log(elementalPoints < catalyticPoints ?
+                    "We have " + elementalPoints + " elemental points, looking for elemental altar..." :
+                    "We have " + catalyticPoints + " catalytic points, looking for catalytic altar...");
+        }
+
+        List<GameObject> availableAltars = Rs2GameObject.getGameObjects().stream()
+                .filter(x -> {
+                    if (!guardianPortalInfo.containsKey(x.getId())) return false;
+                    if (GotrScript.guardianPortalInfo.get(x.getId()).getRequiredLevel() >
+                            Microbot.getClient().getBoostedSkillLevel(Skill.RUNECRAFT)) {
+                        return false;
+                    }
+                    if (GotrScript.guardianPortalInfo.get(x.getId()).getQuestState() != QuestState.FINISHED) {
+                        return false;
+                    }
+                    if (((DynamicObject) x.getRenderable()).getAnimation() == null) {
+                        return false;
+                    }
+                    return ((DynamicObject) x.getRenderable()).getAnimation().getId() == 9363;
+                })
+                .sorted((config.Mode() == Mode.BALANCED && elementalPoints < catalyticPoints)
+                        || config.Mode() == Mode.ELEMENTAL
+                        ? Comparator.comparingInt(TileObject::getId)
+                        : Comparator.comparingInt(TileObject::getId).reversed())
+                .collect(Collectors.toList());
+
+        GameObject availableAltar = availableAltars.stream().findFirst().orElse(null);
         if (availableAltar != null && !Rs2Player.isMoving()) {
             log("Entering with altar " + availableAltar.getId());
             Rs2GameObject.interact(availableAltar);
             state = GotrState.ENTER_ALTAR;
-            Global.sleepUntil(() -> !isInMainRegion() || !Objects.equals(getAvailableAltars().stream().findFirst().orElse(null), availableAltar), 5000);
+            Global.sleepUntil(() -> {
+                int ePoints = Microbot.getVarbitValue(13686);
+                int cPoints = Microbot.getVarbitValue(13685);
+                List<GameObject> altars = Rs2GameObject.getGameObjects().stream()
+                        .filter(x -> {
+                            if (!guardianPortalInfo.containsKey(x.getId())) return false;
+                            if (GotrScript.guardianPortalInfo.get(x.getId()).getRequiredLevel() >
+                                    Microbot.getClient().getBoostedSkillLevel(Skill.RUNECRAFT)) {
+                                return false;
+                            }
+                            if (GotrScript.guardianPortalInfo.get(x.getId()).getQuestState() != QuestState.FINISHED) {
+                                return false;
+                            }
+                            if (((DynamicObject) x.getRenderable()).getAnimation() == null) {
+                                return false;
+                            }
+                            return ((DynamicObject) x.getRenderable()).getAnimation().getId() == 9363;
+                        })
+                        .sorted((config.Mode() == Mode.BALANCED && ePoints < cPoints)
+                                || config.Mode() == Mode.ELEMENTAL
+                                ? Comparator.comparingInt(TileObject::getId)
+                                : Comparator.comparingInt(TileObject::getId).reversed())
+                        .collect(Collectors.toList());
+                return !isInMainRegion() || !Objects.equals(altars.stream().findFirst().orElse(null), availableAltar);
+            }, 5000);
             sleep(Rs2Random.randomGaussian(1000, 300));
 
             return true;
@@ -486,7 +539,69 @@ public class GotrScript extends Script {
 
     private boolean craftRunes() {
         Integer runeId = finalRune(config.rune());
-        TileObject rcAltar = findRcAltar();
+        Integer[] altarIds = new Integer[] {ObjectID.ALTAR_34760, ObjectID.ALTAR_34761, ObjectID.ALTAR_34762,
+                ObjectID.ALTAR_34763, ObjectID.ALTAR_34764, ObjectID.ALTAR_34765, ObjectID.ALTAR_34766,
+                ObjectID.ALTAR_34767, ObjectID.ALTAR_34768, ObjectID.ALTAR_34769, ObjectID.ALTAR_34770,
+                ObjectID.ALTAR_34771, ObjectID.ALTAR_34772, ObjectID.ALTAR_43479};
+        TileObject rcAltar = Rs2GameObject.findObject(altarIds);
+            int altarID = rcAltar.getId();
+            switch (altarID) {
+                case ObjectID.ALTAR_34760: // air
+                    elemental = true;
+                    water = true;
+                    fire = true;
+                    earth = true;
+                    air = false;
+                    airAltar = true;
+                    waterAltar = false;
+                    earthAltar = false;
+                    fireAltar = false;
+                    break;
+                case ObjectID.ALTAR_34762: // water
+                    elemental = true;
+                    air = true;
+                    fire = true;
+                    earth = true;
+                    water = false;
+                    airAltar = false;
+                    waterAltar = true;
+                    earthAltar = false;
+                    fireAltar = false;
+                    break;
+                case ObjectID.ALTAR_34763: // earth
+                    elemental = true;
+                    water = true;
+                    fire = true;
+                    air = true;
+                    earth = false;
+                    airAltar = false;
+                    waterAltar = false;
+                    earthAltar = true;
+                    fireAltar = false;
+                    break;
+                case ObjectID.ALTAR_34764: // fire
+                    elemental = true;
+                    water = true;
+                    air = true;
+                    earth = true;
+                    fire = false;
+                    airAltar = false;
+                    waterAltar = false;
+                    earthAltar = false;
+                    fireAltar = true;
+                    break;
+                default:
+                    elemental = false;
+                    air = false;
+                    water = false;
+                    earth = false;
+                    fire = false;
+                    airAltar = false;
+                    waterAltar = false;
+                    earthAltar = false;
+                    fireAltar = false;
+                    break;
+            }
         if (rcAltar != null) {
             if (runeId != null) {
                 if (config.rune() != Combination.NONE) {
@@ -821,37 +936,6 @@ public class GotrScript extends Script {
         return timeSincePortal.map(instant -> (int) ChronoUnit.SECONDS.between(instant, Instant.now())-firstPortalTimeAdjustment).orElse(-1);
     }
 
-    public static List<GameObject> getAvailableAltars() {
-        int elementalPoints = Microbot.getVarbitValue(13686);
-        int catalyticPoints = Microbot.getVarbitValue(13685);
-        if (config.Mode().equals(Mode.BALANCED)) {
-            log(elementalPoints < catalyticPoints ? "We have " + elementalPoints + " elemental points, looking for elemental altar..." : "We have " + catalyticPoints +" catalytic points, looking for catalytic altar...");
-        }
-        return Rs2GameObject.getGameObjects().stream()
-                .filter(x -> {
-
-                    if (!guardianPortalInfo.containsKey(x.getId())) return false;
-                    if (GotrScript.guardianPortalInfo.get(x.getId()).getRequiredLevel()
-                            > Microbot.getClient().getBoostedSkillLevel(Skill.RUNECRAFT)) {
-                        return false;
-                    }
-                    if (GotrScript.guardianPortalInfo.get(x.getId()).getQuestState() != QuestState.FINISHED) {
-                        return false;
-                    }
-
-                    if (((DynamicObject) x.getRenderable()).getAnimation() == null) {
-                        return false;
-                    }
-                    if (((DynamicObject) x.getRenderable()).getAnimation().getId() != 9363) {
-                        return false;
-                    }
-
-                    return true;
-
-                })
-                .sorted((config.Mode() == Mode.BALANCED && elementalPoints < catalyticPoints) || config.Mode() == Mode.ELEMENTAL ? Comparator.comparingInt(TileObject::getId) : Comparator.comparingInt(TileObject::getId).reversed())
-                .collect(Collectors.toList());
-    }
 
     private int getGuardiansPower() {
         Widget pWidget = Rs2Widget.getWidget(48889874);
@@ -871,83 +955,6 @@ public class GotrScript extends Script {
         Microbot.getClient().clearHintArrow();
     }
 
-//    public static TileObject findRcAltar() {
-//        Integer[] altarIds = new Integer[] {ObjectID.ALTAR_34760, ObjectID.ALTAR_34761, ObjectID.ALTAR_34762, ObjectID.ALTAR_34763, ObjectID.ALTAR_34764,
-//                ObjectID.ALTAR_34765, ObjectID.ALTAR_34766, ObjectID.ALTAR_34767, ObjectID.ALTAR_34768, ObjectID.ALTAR_34769, ObjectID.ALTAR_34770,
-//                ObjectID.ALTAR_34771, ObjectID.ALTAR_34772, ObjectID.ALTAR_43479};
-//        return Rs2GameObject.findObject(altarIds);
-//    }
-
-    public TileObject findRcAltar() {
-
-        Integer[] altarIds = new Integer[] {ObjectID.ALTAR_34760, ObjectID.ALTAR_34761, ObjectID.ALTAR_34762, ObjectID.ALTAR_34763, ObjectID.ALTAR_34764,
-                ObjectID.ALTAR_34765, ObjectID.ALTAR_34766, ObjectID.ALTAR_34767, ObjectID.ALTAR_34768, ObjectID.ALTAR_34769, ObjectID.ALTAR_34770,
-                ObjectID.ALTAR_34771, ObjectID.ALTAR_34772, ObjectID.ALTAR_43479};
-        GameObject currentAltar = Rs2GameObject.findObject(altarIds);
-        if (currentAltar == null) {
-            return null;
-        }
-        int altarID = currentAltar.getId();
-
-        switch (altarID) {
-            case ObjectID.ALTAR_34760: // air
-                elemental = true;
-                water = true;
-                fire = true;
-                earth = true;
-                air = false;
-                airAltar = true;
-                waterAltar = false;
-                earthAltar = false;
-                fireAltar = false;
-                break;
-            case ObjectID.ALTAR_34762: // water
-                elemental = true;
-                air = true;
-                fire = true;
-                earth = true;
-                water = false;
-                airAltar = false;
-                waterAltar = true;
-                earthAltar = false;
-                fireAltar = false;
-                break;
-            case ObjectID.ALTAR_34763: // earth
-                elemental = true;
-                water = true;
-                fire = true;
-                air = true;
-                earth = false;
-                airAltar = false;
-                waterAltar = false;
-                earthAltar = true;
-                fireAltar = false;
-                break;
-            case ObjectID.ALTAR_34764: // fire
-                elemental = true;
-                water = true;
-                air = true;
-                earth = true;
-                fire = false;
-                airAltar = false;
-                waterAltar = false;
-                earthAltar = false;
-                fireAltar = true;
-                break;
-            default:
-                elemental = false;
-                air = false;
-                water = false;
-                earth = false;
-                fire = false;
-                airAltar = false;
-                waterAltar = false;
-                earthAltar = false;
-                fireAltar = false;
-                break;
-        }
-        return currentAltar;
-    }
 
     public static TileObject findPortalToLeaveAltar() {
         Integer[] altarIds = new Integer[] {ObjectID.PORTAL_34748, ObjectID.PORTAL_34749, ObjectID.PORTAL_34750, ObjectID.PORTAL_34751, ObjectID.PORTAL_34752,
