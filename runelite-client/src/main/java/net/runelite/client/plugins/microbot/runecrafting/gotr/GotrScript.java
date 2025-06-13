@@ -770,7 +770,7 @@ public class GotrScript extends Script {
         }
         state = GotrState.MINE_LARGE_GUARDIAN_REMAINS;
         if (isInHugeMine()) {
-            leaveHugeMine();
+            mineHugeGuardianRemain();
             return;
         }
         if (Rs2Player.getSkillRequirement(Skill.AGILITY, 56) && getTimeSincePortal() < 85 && !Rs2Inventory.hasItem(GUARDIAN_ESSENCE)) {
