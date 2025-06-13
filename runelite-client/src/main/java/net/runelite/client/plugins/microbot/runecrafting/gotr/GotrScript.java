@@ -32,6 +32,7 @@ import org.jetbrains.annotations.Nullable;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -60,15 +61,7 @@ public class GotrScript extends Script {
     public static int elementalRewardPoints;
     public static int catalyticRewardPoints;
     public static GotrState state;
-    public static GotrConfig config;
-    public static GotrConfig enabled;
-    public static GotrConfig air;
-    public static GotrConfig water;
-    public static GotrConfig earth;
-    public static GotrConfig fire;
-    public static GotrConfig noBinding;
-    public static GotrConfig timeout;
-    public static GotrConfig runeType;
+    public static GotrConfig config;;
     String GUARDIAN_FRAGMENTS = "guardian fragments";
     String GUARDIAN_ESSENCE = "guardian essence";
 
@@ -130,6 +123,11 @@ public class GotrScript extends Script {
                     if (!Rs2Magic.isLunar()) {
                         log("Lunar spellbook not found...disabling npc contact");
                         useNpcContact = false;
+                        configManager.setConfiguration(config.configGroup, "enabled", false);
+                    }
+                    var magicLevel = Microbot.getClient().getBoostedSkillLevel(Skill.MAGIC);
+                    if (magicLevel < 82) {
+                        configManager.setConfiguration(config.configGroup, "enabled", false);
                     }
                     initCheck = true;
                 }
@@ -156,8 +154,6 @@ public class GotrScript extends Script {
                     BreakHandlerScript.setLockState(true);
                     configManager.setConfiguration(config.configGroup, "timeout", true);
                 }
-
-//                checkPouches(Rs2Inventory.anyPouchUnknown(), 1500, 300);
 
                 if (Rs2Inventory.anyPouchUnknown()) {
                     Rs2Inventory.checkPouches();
@@ -205,6 +201,12 @@ public class GotrScript extends Script {
                     if (!shouldMineGuardianRemains) {
                         //Create fragments into whatever
                         if (isOutOfFragments()) return;
+
+                        if (config.needsDeposit()) {
+                            if (depositRunesIntoPool()) {
+                                configManager.setConfiguration(config.configGroup, "needsDeposit", "false");
+                            }
+                        }
 
                         //deposit runes
 //                        if (depositRunesIntoPool()) return;
@@ -327,11 +329,6 @@ public class GotrScript extends Script {
             log("Powering up the great guardian...");
             sleepUntil(Rs2Player::isAnimating);
             sleep(Rs2Random.randomGaussian(Rs2Random.between(1000, 2000), Rs2Random.between(100, 300)));
-            if (!usePortal()) {
-                Rs2GameObject.interact(ObjectID.DEPOSIT_POOL);
-                log("Deposit runes into pool...");
-                sleep(600, 2400);
-            }
             return true;
         }
         return false;
@@ -379,17 +376,18 @@ public class GotrScript extends Script {
         return false;
     }
 
-//    private boolean depositRunesIntoPool() {
-//        if (config.shouldDepositRunes() && Rs2Inventory.hasItem(runeIds.toArray(Integer[]::new)) && !isInLargeMine() && !isInHugeMine() && !Rs2Inventory.isFull() && !optimizedEssenceLoop) {
-//            if (Rs2Player.isMoving()) return true;
-//            if (Rs2GameObject.interact(ObjectID.DEPOSIT_POOL)) {
-//                log("Deposit runes into pool...");
-//                sleep(600, 2400);
-//            }
-//            return true;
-//        }
-//        return false;
-//    }
+    private boolean depositRunesIntoPool() {
+        if (config.shouldDepositRunes() && !isInLargeMine() && !isInHugeMine() && !Rs2Inventory.isFull() && !optimizedEssenceLoop) {
+            if (Rs2Player.isMoving()) return true;
+            if (Rs2GameObject.interact(ObjectID.DEPOSIT_POOL)) {
+                Rs2Inventory.waitForInventoryChanges(5000);
+                log("Deposit runes into pool...");
+                sleep(600, 2400);
+            }
+            return true;
+        }
+        return false;
+    }
 
     private boolean enterAltar() {
         GameObject availableAltar = getAvailableAltars().stream().findFirst().orElse(null);
@@ -436,7 +434,7 @@ public class GotrScript extends Script {
     }
 
     private boolean isOutOfFragments() {
-        if ((!Rs2Inventory.hasItem(GUARDIAN_FRAGMENTS) && !Rs2Inventory.isFull()) || (getTimeSincePortal() > 85 && !Rs2Inventory.hasItem(GUARDIAN_ESSENCE))) {
+        if ((!Rs2Inventory.hasItem(GUARDIAN_FRAGMENTS) && !Rs2Inventory.isFull()) || usePortal()) {
             shouldMineGuardianRemains = true;
             if(!Rs2Inventory.hasItem(GUARDIAN_FRAGMENTS))
                 log("Memorize that we no longer have guardian fragments...");
@@ -448,49 +446,53 @@ public class GotrScript extends Script {
     }
 
     private boolean craftRunes() {
-        if (config.enabled() && !config.noBinding() && config.elemental() && Rs2Magic.canCast(MagicAction.MAGIC_IMBUE)) {
-            if (!isInMainRegion() && isInMiniGame()) {
-                TileObject rcAltar = findRcAltar();
-                if (rcAltar != null) {
-                    if (Rs2Player.isMoving()) {
+        Integer runeId = finalRune(config.rune());
+        TileObject rcAltar = findRcAltar();
+        if (rcAltar != null) {
+            if (runeId != null) {
+                if (config.enabled()) {
+                    if (!Rs2Inventory.hasItem(ItemID.AIR_RUNE) && !Rs2Inventory.hasItem(ItemID.WATER_RUNE) && !Rs2Inventory.hasItem(ItemID.EARTH_RUNE) && !Rs2Inventory.hasItem(ItemID.FIRE_RUNE)) {
+                        configManager.setConfiguration(config.configGroup, "enabled", false);
                         return true;
                     }
-                    if (Rs2Inventory.anyPouchFull() && !Rs2Inventory.isFull()) {
-                        Rs2Inventory.emptyPouches();
-                        Rs2Inventory.waitForInventoryChanges(5000);
-                        sleep(Rs2Random.randomGaussian(350, 150));
-                    }
-                    if (Rs2Inventory.hasItem(GUARDIAN_ESSENCE)) {
-                        state = GotrState.CRAFTING_RUNES;
-                        optimizedEssenceLoop = false;
-                        if (useNpcContact) {
-                            Rs2Magic.cast(MagicAction.MAGIC_IMBUE);
+                }
+                if (config.enabled() && !config.noBinding() && config.elemental()) {
+                    if (!isInMainRegion() && isInMiniGame()) {
+                        if (Rs2Player.isMoving()) {
+                            return true;
                         }
-                        Integer runeId = finalRune(config.rune());
-                        if (runeId != null) {
+                        if (Rs2Inventory.anyPouchFull() && !Rs2Inventory.isFull()) {
+                            Rs2Inventory.emptyPouches();
+                            Rs2Inventory.waitForInventoryChanges(5000);
+                            sleep(Rs2Random.randomGaussian(350, 150));
+                        }
+                        if (Rs2Inventory.hasItem(GUARDIAN_ESSENCE)) {
+                            state = GotrState.CRAFTING_RUNES;
+                            optimizedEssenceLoop = false;
+                            if (Rs2Magic.quickCanCast(MagicAction.MAGIC_IMBUE)) {
+                                Rs2Magic.cast(MagicAction.MAGIC_IMBUE);
+                            }
                             Rs2Inventory.interact(runeId, "use");
                             Rs2GameObject.interact(rcAltar.getId());
                             log("Combining runes on altar " + rcAltar.getId());
                             sleep(Rs2Random.randomGaussian(Rs2Random.between(1000, 1500), 300));
                             return true;
+                        } else if (!Rs2Player.isMoving()) {
+                            configManager.setConfiguration(config.configGroup, "needsDeposit", true);
+                            state = GotrState.LEAVING_ALTAR;
+                            TileObject rcPortal = findPortalToLeaveAltar();
+                            if (Rs2GameObject.interact(rcPortal.getId())) {
+                                log("Leaving the altar...");
+                                sleepUntilTrue(GotrScript::isInMainRegion, 100, 10000);
+                                sleep(Rs2Random.randomGaussian(750, 150));
+                            }
                         }
-                    } else if (!Rs2Player.isMoving()) {
-                        state = GotrState.LEAVING_ALTAR;
-                        TileObject rcPortal = findPortalToLeaveAltar();
-                        if (Rs2GameObject.interact(rcPortal.getId())) {
-                            log("Leaving the altar...");
-                            sleepUntilTrue(GotrScript::isInMainRegion, 100, 10000);
-                            sleep(Rs2Random.randomGaussian(750, 150));
-                        }
+                        return true;
                     }
-                    return true;
+                    return false;
                 }
             }
-            return false;
-        }
-        if (!isInMainRegion() && isInMiniGame()) {
-            TileObject rcAltar = findRcAltar();
-            if (rcAltar != null) {
+            if (!isInMainRegion() && isInMiniGame()) {
                 if (Rs2Player.isMoving()) {
                     return true;
                 }
@@ -506,6 +508,7 @@ public class GotrScript extends Script {
                     log("Crafting runes on altar " + rcAltar.getId());
                     sleep(Rs2Random.randomGaussian(Rs2Random.between(1000, 1500), 300));
                 } else if (!Rs2Player.isMoving()) {
+                    configManager.setConfiguration(config.configGroup, "needsDeposit", true);
                     state = GotrState.LEAVING_ALTAR;
                     TileObject rcPortal = findPortalToLeaveAltar();
                     if (Rs2GameObject.interact(rcPortal.getId())) {
@@ -516,6 +519,7 @@ public class GotrScript extends Script {
                 }
                 return true;
             }
+            return false;
         }
         return false;
     }
@@ -644,26 +648,26 @@ public class GotrScript extends Script {
                     if (Rs2Equipment.isWearing("dragon pickaxe")) {
                         Rs2Combat.setSpecState(true, 1000);
                     }
-//                    checkPouches(Rs2Random.between(1, 20) == 2, Rs2Random.between(100, 600), Rs2Random.between(100, 300));
-
-//                    repairPouches();
+                    repairPouches();
                     Rs2GameObject.interact(ObjectID.LARGE_GUARDIAN_REMAINS);
                     sleepGaussian(1200, 150);
                 }
             }
         } else {
             //guardian parts
-            if (!Rs2Player.isAnimating() && getStartTimer() != -1) {
+            if ((!Rs2Player.getSkillRequirement(Skill.AGILITY, 56)) && !Rs2Player.isAnimating() && getStartTimer() != -1 && !Rs2Inventory.hasItem(GUARDIAN_ESSENCE)) {
                 if(isInLargeMine()) {
                     leaveLargeMine();
                 }
                 if (Rs2Equipment.isWearing("dragon pickaxe")) {
                     Rs2Combat.setSpecState(true, 1000);
                 }
-//                repairPouches();
+                repairPouches();
                 Rs2GameObject.interact(ObjectID.GUARDIAN_PARTS_43716);
                 sleepGaussian(1200, 150);
                 // we can assume that if the player is mining within the startTimer range, he will get enough guardian remains for the game
+                shouldMineGuardianRemains = false;
+            } else {
                 shouldMineGuardianRemains = false;
             }
         }
@@ -854,12 +858,20 @@ public class GotrScript extends Script {
                     configManager.setConfiguration(config.configGroup, key, true);
                 }
                 configManager.setConfiguration(config.configGroup, "air", false);
+                configManager.setConfiguration(config.configGroup, "airAltar", true);
+                configManager.setConfiguration(config.configGroup, "waterAltar", false);
+                configManager.setConfiguration(config.configGroup, "earthAltar", false);
+                configManager.setConfiguration(config.configGroup, "fireAltar", false);
                 break;
             case ObjectID.ALTAR_34762: // water
                 configManager.setConfiguration(config.configGroup, "elemental", true);
                 List<String> waterElements = List.of("air", "fire", "earth");
                 for (String key : waterElements) {
                     configManager.setConfiguration(config.configGroup, key, true);
+                    configManager.setConfiguration(config.configGroup, "airAltar", false);
+                    configManager.setConfiguration(config.configGroup, "waterAltar", true);
+                    configManager.setConfiguration(config.configGroup, "earthAltar", false);
+                    configManager.setConfiguration(config.configGroup, "fireAltar", false);
                 }
                 configManager.setConfiguration(config.configGroup, "water", false);
                 break;
@@ -868,6 +880,10 @@ public class GotrScript extends Script {
                 List<String> earthElements = List.of("water", "fire", "air");
                 for (String key : earthElements) {
                     configManager.setConfiguration(config.configGroup, key, true);
+                    configManager.setConfiguration(config.configGroup, "airAltar", false);
+                    configManager.setConfiguration(config.configGroup, "waterAltar", false);
+                    configManager.setConfiguration(config.configGroup, "earthAltar", true);
+                    configManager.setConfiguration(config.configGroup, "fireAltar", false);
                 }
                 configManager.setConfiguration(config.configGroup, "earth", false);
                 break;
@@ -878,12 +894,20 @@ public class GotrScript extends Script {
                     configManager.setConfiguration(config.configGroup, key, true);
                 }
                 configManager.setConfiguration(config.configGroup, "fire", false);
+                configManager.setConfiguration(config.configGroup, "airAltar", false);
+                configManager.setConfiguration(config.configGroup, "waterAltar", false);
+                configManager.setConfiguration(config.configGroup, "earthAltar", false);
+                configManager.setConfiguration(config.configGroup, "fireAltar", true);
                 break;
             default:
                 configManager.setConfiguration(config.configGroup, "elemental", false);
                 List<String> catalyticElements = List.of("air", "water", "fire", "earth");
                 for (String key : catalyticElements) {
                     configManager.setConfiguration(config.configGroup, key, false);
+                    configManager.setConfiguration(config.configGroup, "airAltar", false);
+                    configManager.setConfiguration(config.configGroup, "waterAltar", false);
+                    configManager.setConfiguration(config.configGroup, "earthAltar", false);
+                    configManager.setConfiguration(config.configGroup, "fireAltar", false);
                 }
                 break;
         }
@@ -976,53 +1000,101 @@ public class GotrScript extends Script {
     public Integer finalRune(Combination combo) {
         switch (combo) {
             case MIST: // needs AIR + WATER
-                if (!config.water() && config.air()) {
+                if (config.waterAltar() && config.air() && Rs2Inventory.hasItem(ItemID.AIR_RUNE)) {
                     return ItemID.AIR_RUNE;
                 }
-                if (!config.air() && config.water()) {
+                if (config.airAltar() && config.water() && Rs2Inventory.hasItem(ItemID.WATER_RUNE)) {
                     return ItemID.WATER_RUNE;
                 }
                 break;
             case MUD: // WATER + EARTH
-                if (!config.water() && config.earth()) {
+                if (config.waterAltar() && config.earth() && Rs2Inventory.hasItem(ItemID.EARTH_RUNE)) {
                     return ItemID.EARTH_RUNE;
                 }
-                if (!config.earth() && config.water()) {
+                if (config.earthAltar() && config.water() && Rs2Inventory.hasItem(ItemID.WATER_RUNE)) {
                     return ItemID.WATER_RUNE;
                 }
                 break;
             case DUST: // EARTH + AIR
-                if (!config.earth() && config.air()) {
+                if (config.earthAltar() && config.air() && Rs2Inventory.hasItem(ItemID.AIR_RUNE)) {
                     return ItemID.AIR_RUNE;
                 }
-                if (!config.air() && config.earth()) {
+                if (config.airAltar() && config.earth() && Rs2Inventory.hasItem(ItemID.EARTH_RUNE)) {
                     return ItemID.EARTH_RUNE;
                 }
                 break;
             case LAVA: // EARTH + FIRE
-                if (!config.earth() && config.fire()) {
-                    return ItemID.FIRE_RUNE;
-                }
-                if (!config.fire() && config.earth()) {
+                if (config.fireAltar() && config.earth() && Rs2Inventory.hasItem(ItemID.EARTH_RUNE)) {
                     return ItemID.EARTH_RUNE;
+                }
+                if (config.earthAltar() && config.fire() && Rs2Inventory.hasItem(ItemID.FIRE_RUNE)) {
+                    return ItemID.FIRE_RUNE;
                 }
                 break;
             case STEAM: // WATER + FIRE
-                if (!config.water() && config.fire()) {
+                if (config.waterAltar() && config.fire() && Rs2Inventory.hasItem(ItemID.FIRE_RUNE)) {
                     return ItemID.FIRE_RUNE;
                 }
-                if (!config.fire() && config.water()) {
+                if (config.fireAltar() && config.water() && Rs2Inventory.hasItem(ItemID.WATER_RUNE)) {
                     return ItemID.WATER_RUNE;
                 }
                 break;
             case SMOKE: // FIRE + AIR
-                if (!config.fire() && config.air()) {
+                if (config.fireAltar() && config.air() && Rs2Inventory.hasItem(ItemID.AIR_RUNE)) {
                     return ItemID.AIR_RUNE;
                 }
-                if (!config.air() && config.fire()) {
+                if (config.airAltar() && config.fire() && Rs2Inventory.hasItem(ItemID.FIRE_RUNE)) {
                     return ItemID.FIRE_RUNE;
                 }
                 break;
+            case ALL:
+                // Gather all valid rune IDs based on config and inventory
+                List<Integer> candidates = new ArrayList<>();
+
+                if (config.waterAltar() && config.air() && Rs2Inventory.hasItem(ItemID.AIR_RUNE)) {
+                    candidates.add(ItemID.AIR_RUNE);
+                }
+                if (config.airAltar() && config.water() && Rs2Inventory.hasItem(ItemID.WATER_RUNE)) {
+                    candidates.add(ItemID.WATER_RUNE);
+                }
+                if (config.waterAltar() && config.earth() && Rs2Inventory.hasItem(ItemID.EARTH_RUNE)) {
+                    candidates.add(ItemID.EARTH_RUNE);
+                }
+                if (config.earthAltar() && config.water() && Rs2Inventory.hasItem(ItemID.WATER_RUNE)) {
+                    candidates.add(ItemID.WATER_RUNE);
+                }
+                if (config.earthAltar() && config.air() && Rs2Inventory.hasItem(ItemID.AIR_RUNE)) {
+                    candidates.add(ItemID.AIR_RUNE);
+                }
+                if (config.airAltar() && config.earth() && Rs2Inventory.hasItem(ItemID.EARTH_RUNE)) {
+                    candidates.add(ItemID.EARTH_RUNE);
+                }
+                if (config.fireAltar() && config.earth() && Rs2Inventory.hasItem(ItemID.EARTH_RUNE)) {
+                    candidates.add(ItemID.EARTH_RUNE);
+                }
+                if (config.earthAltar() && config.fire() && Rs2Inventory.hasItem(ItemID.FIRE_RUNE)) {
+                    candidates.add(ItemID.FIRE_RUNE);
+                }
+                if (config.waterAltar() && config.fire() && Rs2Inventory.hasItem(ItemID.FIRE_RUNE)) {
+                    candidates.add(ItemID.FIRE_RUNE);
+                }
+                if (config.fireAltar() && config.water() && Rs2Inventory.hasItem(ItemID.WATER_RUNE)) {
+                    candidates.add(ItemID.WATER_RUNE);
+                }
+                if (config.fireAltar() && config.air() && Rs2Inventory.hasItem(ItemID.AIR_RUNE)) {
+                    candidates.add(ItemID.AIR_RUNE);
+                }
+                if (config.airAltar() && config.fire() && Rs2Inventory.hasItem(ItemID.FIRE_RUNE)) {
+                    candidates.add(ItemID.FIRE_RUNE);
+                }
+
+                if (candidates.isEmpty()) {
+                    // No valid runes found: handle as appropriate (null, exception, fallback)
+                    return null;
+                }
+                // Pick one at random
+                int idx = ThreadLocalRandom.current().nextInt(candidates.size());
+                return candidates.get(idx);
             default:
                 return null;
         }

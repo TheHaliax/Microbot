@@ -27,7 +27,11 @@ public interface GotrConfig extends Config {
     String noBinding = "noBinding";
     String timeout = "timeout";
     String elemental = "elemental";
-    String allowedRunes = "allowedRunes";
+    String airAltar = "airAltar";
+    String waterAltar = "waterAltar";
+    String earthAltar = "earthAltar";
+    String fireAltar = "fireAltar";
+    String needsDeposit = "needsDeposit";
 
     @ConfigSection(
             name = "General",
@@ -172,4 +176,49 @@ public interface GotrConfig extends Config {
             section = debugSection
     )
     default boolean fire() { return false; }
+
+    @ConfigItem(
+            keyName = airAltar,
+            name = "Air Altar?",
+            description = "are we at the Air Altar?",
+            position = 7,
+            section = debugSection
+    )
+    default boolean airAltar() { return false; }
+
+    @ConfigItem(
+            keyName = waterAltar,
+            name = "Water Altar?",
+            description = "are we at the Water Altar?",
+            position = 8,
+            section = debugSection
+    )
+    default boolean waterAltar() { return false; }
+
+    @ConfigItem(
+            keyName = earthAltar,
+            name = "Earth Altar?",
+            description = "are we at the Earth Altar?",
+            position = 9,
+            section = debugSection
+    )
+    default boolean earthAltar() { return false; }
+
+    @ConfigItem(
+            keyName = fireAltar,
+            name = "Fire Altar?",
+            description = "are we at the Fire Altar?",
+            position = 10,
+            section = debugSection
+    )
+    default boolean fireAltar() { return false; }
+
+    @ConfigItem(
+            keyName = needsDeposit,
+            name = "needs Deposit?",
+            description = "are we at the Fire Altar?",
+            position = 11,
+            section = debugSection
+    )
+    default boolean needsDeposit() { return false; }
 }
