@@ -496,17 +496,22 @@ public class GotrScript extends Script {
             return false;
         }
 
-        if (Rs2Inventory.isFull() && Rs2Inventory.anyPouchEmpty() && getGuardiansPower() < 90) {
+        boolean filled = false;
+
+        while (Rs2Inventory.anyPouchEmpty()
+                && Rs2Inventory.hasItem(GUARDIAN_ESSENCE)
+                && getGuardiansPower() < 90) {
             Rs2Inventory.fillPouches();
+            Rs2Inventory.waitForInventoryChanges(1800);
             sleep(Rs2Random.randomGaussian(600, 300));
-
-            if (Rs2Inventory.allPouchesFull() || Rs2Inventory.getRemainingCapacityInPouches() == 0) {
-                pouchesFilled = true;
-            }
-
-            return true;
+            filled = true;
         }
-        return false;
+
+        if (Rs2Inventory.allPouchesFull()) {
+            pouchesFilled = true;
+        }
+
+        return filled;
     }
 
     private boolean isOutOfFragments() {
