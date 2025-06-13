@@ -35,13 +35,6 @@ public interface GotrConfig extends Config {
     )
     String combinationSection = "combination";
 
-    @ConfigSection(
-            name = "Debug",
-            description = "Debug settings",
-            position = 2
-    )
-    String debugSection = "debug";
-
     @ConfigItem(
             keyName = mode,
             name = "Mode",
@@ -92,7 +85,7 @@ public interface GotrConfig extends Config {
             position = 1,
             section = combinationSection
     )
-    default Combination rune() {return Combination.MIST;}
+    default Combination rune() {return Combination.NONE;}
 
 
 }
