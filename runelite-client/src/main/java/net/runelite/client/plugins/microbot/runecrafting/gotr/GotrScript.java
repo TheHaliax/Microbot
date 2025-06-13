@@ -396,65 +396,12 @@ public class GotrScript extends Script {
     }
 
     private boolean enterAltar() {
-        int elementalPoints = Microbot.getVarbitValue(13686);
-        int catalyticPoints = Microbot.getVarbitValue(13685);
-        if (config.Mode().equals(Mode.BALANCED)) {
-            log(elementalPoints < catalyticPoints ?
-                    "We have " + elementalPoints + " elemental points, looking for elemental altar..." :
-                    "We have " + catalyticPoints + " catalytic points, looking for catalytic altar...");
-        }
-
-        List<GameObject> availableAltars = Rs2GameObject.getGameObjects().stream()
-                .filter(x -> {
-                    if (!guardianPortalInfo.containsKey(x.getId())) return false;
-                    if (GotrScript.guardianPortalInfo.get(x.getId()).getRequiredLevel() >
-                            Microbot.getClient().getBoostedSkillLevel(Skill.RUNECRAFT)) {
-                        return false;
-                    }
-                    if (GotrScript.guardianPortalInfo.get(x.getId()).getQuestState() != QuestState.FINISHED) {
-                        return false;
-                    }
-                    if (((DynamicObject) x.getRenderable()).getAnimation() == null) {
-                        return false;
-                    }
-                    return ((DynamicObject) x.getRenderable()).getAnimation().getId() == 9363;
-                })
-                .sorted((config.Mode() == Mode.BALANCED && elementalPoints < catalyticPoints)
-                        || config.Mode() == Mode.ELEMENTAL
-                        ? Comparator.comparingInt(TileObject::getId)
-                        : Comparator.comparingInt(TileObject::getId).reversed())
-                .collect(Collectors.toList());
-
-        GameObject availableAltar = availableAltars.stream().findFirst().orElse(null);
+        GameObject availableAltar = getAvailableAltars().stream().findFirst().orElse(null);
         if (availableAltar != null && !Rs2Player.isMoving()) {
             log("Entering with altar " + availableAltar.getId());
             Rs2GameObject.interact(availableAltar);
             state = GotrState.ENTER_ALTAR;
-            Global.sleepUntil(() -> {
-                int ePoints = Microbot.getVarbitValue(13686);
-                int cPoints = Microbot.getVarbitValue(13685);
-                List<GameObject> altars = Rs2GameObject.getGameObjects().stream()
-                        .filter(x -> {
-                            if (!guardianPortalInfo.containsKey(x.getId())) return false;
-                            if (GotrScript.guardianPortalInfo.get(x.getId()).getRequiredLevel() >
-                                    Microbot.getClient().getBoostedSkillLevel(Skill.RUNECRAFT)) {
-                                return false;
-                            }
-                            if (GotrScript.guardianPortalInfo.get(x.getId()).getQuestState() != QuestState.FINISHED) {
-                                return false;
-                            }
-                            if (((DynamicObject) x.getRenderable()).getAnimation() == null) {
-                                return false;
-                            }
-                            return ((DynamicObject) x.getRenderable()).getAnimation().getId() == 9363;
-                        })
-                        .sorted((config.Mode() == Mode.BALANCED && ePoints < cPoints)
-                                || config.Mode() == Mode.ELEMENTAL
-                                ? Comparator.comparingInt(TileObject::getId)
-                                : Comparator.comparingInt(TileObject::getId).reversed())
-                        .collect(Collectors.toList());
-                return !isInMainRegion() || !Objects.equals(altars.stream().findFirst().orElse(null), availableAltar);
-            }, 5000);
+            Global.sleepUntil(() -> !isInMainRegion() || !Objects.equals(getAvailableAltars().stream().findFirst().orElse(null), availableAltar), 5000);
             sleep(Rs2Random.randomGaussian(1000, 300));
 
             return true;
@@ -941,6 +888,37 @@ public class GotrScript extends Script {
         }
         int firstPortalTimeAdjustment = isFirstPortal ? 40 : 0;
         return timeSincePortal.map(instant -> (int) ChronoUnit.SECONDS.between(instant, Instant.now())-firstPortalTimeAdjustment).orElse(-1);
+    }
+
+    public static List<GameObject> getAvailableAltars() {
+        int elementalPoints = Microbot.getVarbitValue(13686);
+        int catalyticPoints = Microbot.getVarbitValue(13685);
+        if (config.Mode().equals(Mode.BALANCED)) {
+            log(elementalPoints < catalyticPoints ? "We have " + elementalPoints + " elemental points, looking for elemental altar..." :
+                    "We have " + catalyticPoints + " catalytic points, looking for catalytic altar...");
+        }
+        return Rs2GameObject.getGameObjects().stream()
+                .filter(x -> {
+                    if (!guardianPortalInfo.containsKey(x.getId())) return false;
+                    if (GotrScript.guardianPortalInfo.get(x.getId()).getRequiredLevel()
+                            > Microbot.getClient().getBoostedSkillLevel(Skill.RUNECRAFT)) {
+                        return false;
+                    }
+                    if (GotrScript.guardianPortalInfo.get(x.getId()).getQuestState() != QuestState.FINISHED) {
+                        return false;
+                    }
+                    if (((DynamicObject) x.getRenderable()).getAnimation() == null) {
+                        return false;
+                    }
+                    if (((DynamicObject) x.getRenderable()).getAnimation().getId() != 9363) {
+                        return false;
+                    }
+                    return true;
+                })
+                .sorted((config.Mode() == Mode.BALANCED && elementalPoints < catalyticPoints)
+                        || config.Mode() == Mode.ELEMENTAL ? Comparator.comparingInt(TileObject::getId)
+                        : Comparator.comparingInt(TileObject::getId).reversed())
+                .collect(Collectors.toList());
     }
 
 
