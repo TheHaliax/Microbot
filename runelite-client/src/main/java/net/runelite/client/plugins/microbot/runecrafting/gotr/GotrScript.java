@@ -45,6 +45,18 @@ public class GotrScript extends Script {
     public static String version = "1.2.1";
     public static long totalTime = 0;
     public static boolean shouldMineGuardianRemains = true;
+    /**
+     * Indicates that all available pouches have been filled with essence.
+     * This prevents repeated attempts at filling while skilling until the
+     * pouches are emptied again when crafting runes.
+     */
+    public static boolean pouchesFilled = false;
+    /**
+     * Flag indicating whether a lack of guardian fragments has already been
+     * detected. Used to ensure related messages are logged only once until
+     * fragments are acquired again.
+     */
+    public static boolean outOfFragmentsDetected = false;
     public static final String rewardPointRegex = "Total elemental energy:[^>]+>([\\d,]+).*Total catalytic energy:[^>]+>([\\d,]+).";
     public static final Pattern rewardPointPattern = Pattern.compile(rewardPointRegex);
 
@@ -173,13 +185,7 @@ public class GotrScript extends Script {
                     return; // bail from this loop iteration to avoid repeating logic on unknown state
                 }
 
-                if (!Rs2Player.isAnimating()) {
-                    if (!Rs2Inventory.allPouchesFull()) {
-                        Rs2Inventory.fillPouches();
-                    } else if ((!Rs2Inventory.allPouchesFull()) && Rs2Inventory.isFull()) {
-                        if (!enterAltar()) return;
-                    }
-                }
+
 
                 //IS INSIDE THE MINIGAME
                 int timeToStart = 0;
@@ -445,9 +451,18 @@ public class GotrScript extends Script {
     }
 
     private boolean fillPouches() {
+        if (pouchesFilled) {
+            return false;
+        }
+
         if (Rs2Inventory.isFull() && Rs2Inventory.anyPouchEmpty() && getGuardiansPower() < 90) {
             Rs2Inventory.fillPouches();
             sleep(Rs2Random.randomGaussian(600, 300));
+
+            if (Rs2Inventory.allPouchesFull() || Rs2Inventory.getRemainingCapacityInPouches() == 0) {
+                pouchesFilled = true;
+            }
+
             return true;
         }
         return false;
@@ -456,11 +471,16 @@ public class GotrScript extends Script {
     private boolean isOutOfFragments() {
         if (!Rs2Inventory.hasItem(GUARDIAN_FRAGMENTS)) {
             shouldMineGuardianRemains = true;
-            if(!Rs2Inventory.hasItem(GUARDIAN_FRAGMENTS))
+            if (!outOfFragmentsDetected) {
+                outOfFragmentsDetected = true;
                 log("Memorize that we no longer have guardian fragments...");
-
+            }
             return true;
         }
+
+        // fragments are present again; reset flag so future depletion events
+        // will trigger logging once more
+        outOfFragmentsDetected = false;
         return false;
     }
 
@@ -482,6 +502,7 @@ public class GotrScript extends Script {
                         }
                         if (Rs2Inventory.anyPouchFull() && !Rs2Inventory.isFull()) {
                             Rs2Inventory.emptyPouches();
+                            pouchesFilled = false;
                             Rs2Inventory.waitForInventoryChanges(5000);
                             sleep(Rs2Random.randomGaussian(350, 150));
                         }
@@ -517,6 +538,7 @@ public class GotrScript extends Script {
                 }
                 if (Rs2Inventory.anyPouchFull() && !Rs2Inventory.isFull()) {
                     Rs2Inventory.emptyPouches();
+                    pouchesFilled = false;
                     Rs2Inventory.waitForInventoryChanges(5000);
                     sleep(Rs2Random.randomGaussian(350, 150));
                 }
@@ -612,14 +634,16 @@ public class GotrScript extends Script {
                 }
             } else {
                 if (Rs2Inventory.allPouchesFull()) {
-                    if(Rs2Inventory.hasItem("guardian stone"))
+                    if (Rs2Inventory.hasItem("guardian stone")) {
                         optimizedEssenceLoop = true;
+                    }
                     leaveHugeMine();
                 } else {
-                    Rs2Inventory.fillPouches();
-                    sleep(Rs2Random.randomGaussian(Rs2Random.between(600, 1200), Rs2Random.between(100, 300)));
-                    if (!Rs2Inventory.isFull()) {
-                        Rs2GameObject.interact(ObjectID.HUGE_GUARDIAN_REMAINS);
+                    if (fillPouches()) {
+                        // if inventory was freed by filling pouches, resume mining
+                        if (!Rs2Inventory.isFull()) {
+                            Rs2GameObject.interact(ObjectID.HUGE_GUARDIAN_REMAINS);
+                        }
                     }
                 }
             }
@@ -672,9 +696,10 @@ public class GotrScript extends Script {
                 }
             }
         } else {
-            //guardian parts
-            if ((!Rs2Player.getSkillRequirement(Skill.AGILITY, 56)) && !Rs2Player.isAnimating() && getStartTimer() != -1 && !Rs2Inventory.hasItem(GUARDIAN_ESSENCE)) {
-                if(isInLargeMine()) {
+            // guardian parts
+            if ((!Rs2Player.getSkillRequirement(Skill.AGILITY, 56)) && !Rs2Player.isAnimating() &&
+                getStartTimer() != -1 && !Rs2Inventory.hasItem(GUARDIAN_ESSENCE)) {
+                if (isInLargeMine()) {
                     leaveLargeMine();
                 }
                 if (Rs2Equipment.isWearing("dragon pickaxe")) {
@@ -683,10 +708,6 @@ public class GotrScript extends Script {
                 repairPouches();
                 Rs2GameObject.interact(ObjectID.GUARDIAN_PARTS_43716);
                 sleepGaussian(1200, 150);
-                // we can assume that if the player is mining within the startTimer range, he will get enough guardian remains for the game
-                shouldMineGuardianRemains = false;
-            } else {
-                shouldMineGuardianRemains = false;
             }
         }
     }
