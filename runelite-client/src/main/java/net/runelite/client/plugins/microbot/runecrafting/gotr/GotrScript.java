@@ -162,10 +162,16 @@ public class GotrScript extends Script {
                 }
 
                 if (!Rs2Player.isAnimating()) {
-                    if (!Rs2Inventory.allPouchesFull()) {
-                        Rs2Inventory.fillPouches();
-                    } else if ((!Rs2Inventory.allPouchesFull()) && Rs2Inventory.isFull()) {
-                        if (!enterAltar()) return;
+                    if (state != GotrState.MINE_LARGE_GUARDIAN_REMAINS){
+                        if (state != GotrState.ENTER_GAME){
+                            if (state != GotrState.WAITING){
+                                if (!Rs2Inventory.allPouchesFull()) {
+                                    Rs2Inventory.fillPouches();
+                                } else if ((!Rs2Inventory.allPouchesFull()) && Rs2Inventory.isFull()) {
+                                    if (!enterAltar()) return;
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -442,6 +448,9 @@ public class GotrScript extends Script {
     }
 
     private boolean isOutOfFragments() {
+        if (Rs2Inventory.isFull() && Rs2Inventory.allPouchesFull()){
+            enterAltar();
+        }
         if (!Rs2Inventory.hasItem(GUARDIAN_FRAGMENTS)) {
             shouldMineGuardianRemains = true;
             if(!Rs2Inventory.hasItem(GUARDIAN_FRAGMENTS))
