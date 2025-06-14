@@ -182,7 +182,7 @@ public class GotrScript extends Script {
         switch (state) {
             case INITIALIZE:
                 if (initialize()) {
-                    state = GotrState.WAITING;
+                    state = GotrState.ENTER_GAME;
                 }
                 break;
             case WAITING:
@@ -227,13 +227,23 @@ public class GotrScript extends Script {
     }
 
     private void handleEnterGameState() {
-        if (!Rs2Inventory.hasItem("Uncharged cell")) {
-            takeUnchargedCells();
+        if (timeout || (config.rune() != Combination.NONE && noBind)) {
+            state = GotrState.BANKING;
+            resetPlugin();
             return;
         }
 
-        if (!isInLargeMine() && !isInHugeMine()) {
-            state = GotrState.MINE_LARGE_GUARDIAN_REMAINS;
+        if (isOutsideBarrier()) {
+            if (Rs2GameObject.interact(ObjectID.BARRIER_43700, "quick-pass")) {
+                Rs2Player.waitForWalking();
+            }
+        }
+
+        if (!isOutsideBarrier()) {
+            if (!Rs2Inventory.hasItem("Uncharged cell")) {
+                takeUnchargedCells();
+            }
+            state = GotrState.WAITING;
         }
     }
 
@@ -340,6 +350,14 @@ public class GotrScript extends Script {
 
         if (waitingForGameToStart(timeToStart)) return;
 
+        if (isOutsideBarrier()) {
+            if (Rs2GameObject.interact(ObjectID.BARRIER_43700, "quick-pass")) {
+                Rs2Player.waitForWalking();
+            }
+        }
+
+        if (isOutsideBarrier()) return;
+
         if (!Rs2Inventory.hasItem("Uncharged cell") && !isInLargeMine() && !isInHugeMine()) {
             takeUnchargedCells();
             return;
@@ -379,7 +397,14 @@ public class GotrScript extends Script {
     private boolean waitingForGameToStart(int timeToStart) {
         if (isInHugeMine()) return false;
 
-        if (getStartTimer() > Rs2Random.randomGaussian(35, Rs2Random.between(1, 5)) || getStartTimer() == -1 || timeToStart > 10) {
+        int startTimer = getStartTimer();
+        // If the timer widget isn't visible and we're outside the barrier,
+        // return false so we attempt to enter the minigame first.
+        if (startTimer == -1 && isOutsideBarrier()) {
+            return false;
+        }
+
+        if (startTimer > Rs2Random.randomGaussian(35, Rs2Random.between(1, 5)) || startTimer == -1 || timeToStart > 10) {
 
             // Only take cells if we don't already have them
             if (!Rs2Inventory.hasItem("Uncharged cell")) {
@@ -750,7 +775,7 @@ public class GotrScript extends Script {
 
         resetPlugin();
         if (!isOutsideBarrier()) {
-            if (Rs2GameObject.interact(ObjectID.BARRIER_43700)) {
+            if (Rs2GameObject.interact(ObjectID.BARRIER_43700, "quick-pass")) {
                 Rs2Player.waitForWalking();
                 return true;
             }
@@ -774,7 +799,7 @@ public class GotrScript extends Script {
         }
 
         if (isOutsideBarrier()) {
-            if (Rs2GameObject.interact(ObjectID.BARRIER_43700)) {
+            if (Rs2GameObject.interact(ObjectID.BARRIER_43700, "quick-pass")) {
                 Rs2Player.waitForWalking();
             }
         }
@@ -942,7 +967,6 @@ public class GotrScript extends Script {
 
     @Override
     public void shutdown() {
-        state = null;
         state = GotrState.SHUTDOWN;
         super.shutdown();
     }
@@ -1060,7 +1084,7 @@ public class GotrScript extends Script {
         activeGuardianPortals.clear();
         greatGuardian = null;
         Microbot.getClient().clearHintArrow();
-        state = GotrState.WAITING;
+        state = GotrState.ENTER_GAME;
     }
 
 
@@ -1095,7 +1119,7 @@ public class GotrScript extends Script {
         }
 
         if (!isOutsideBarrier()) {
-            if (Rs2GameObject.interact(ObjectID.BARRIER_43700)) {
+            if (Rs2GameObject.interact(ObjectID.BARRIER_43700, "quick-pass")) {
                 Rs2Player.waitForWalking();
                 return false;
             }
