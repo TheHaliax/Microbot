@@ -1,6 +1,7 @@
 package net.runelite.client.plugins.microbot.runecrafting.gotr;
 
 import com.google.inject.Provides;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.GameObject;
@@ -32,6 +33,7 @@ import static net.runelite.client.plugins.microbot.runecrafting.gotr.GotrScript.
 )
 @Slf4j
 public class GotrPlugin extends Plugin {
+    @Getter
     @Inject
     private GotrConfig config;
 
@@ -49,10 +51,6 @@ public class GotrPlugin extends Plugin {
     @Inject
     GotrScript gotrScript;
 
-    public GotrConfig getConfig() {
-        return config;
-    }
-
 
     @Override
     protected void startUp() throws AWTException {
@@ -66,6 +64,7 @@ public class GotrPlugin extends Plugin {
 
     protected void shutDown() {
         GotrScript.state = GotrState.SHUTDOWN;
+        GotrScript.resetPlugin(GotrState.SHUTDOWN);
         gotrScript.shutdown();
         overlayManager.remove(gotrOverlay);
     }

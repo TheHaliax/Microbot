@@ -164,6 +164,7 @@ public class GotrScript extends Script {
 
                 long endTime = System.currentTimeMillis();
                 totalTime = endTime - startTime;
+                System.out.println("Total time for loop " + totalTime);
                 log("Total time for loop " + totalTime);
 
             } catch (Exception ex) {
@@ -180,6 +181,7 @@ public class GotrScript extends Script {
                 if (initialize()) {
                     state = GotrState.WAITING;
                 }
+                initialize();
                 break;
             case WAITING:
                 handleWaitingState(timeToStart);
@@ -202,11 +204,21 @@ public class GotrScript extends Script {
             case CRAFT_GUARDIAN_ESSENCE:
                 handleCraftEssenceState();
                 break;
+            case PORTAL:
+                handlePortalState();
+                break;
+            case OPTIMIZATION_LOOP:
+                handleOptimizationLoop();
+                break;
+            case END_GAME:
+                handleEndGame();
+                break;
             case BANKING:
                 handleBankRun();
                 break;
             case SHUTDOWN:
                 resetPlugin();
+                resetPlugin(GotrState.SHUTDOWN);
                 break;
             default:
                 state = GotrState.WAITING;
@@ -230,6 +242,28 @@ public class GotrScript extends Script {
 
         if (!isInLargeMine() && !isInHugeMine()) {
             state = GotrState.MINE_LARGE_GUARDIAN_REMAINS;
+        if (!preGameChecks()) {
+            state = GotrState.SHUTDOWN;
+            return;
+        }
+
+        if (timeout || (config.rune() != Combination.NONE && noBind)) {
+            state = GotrState.BANKING;
+            resetPlugin();
+            return;
+        }
+
+        if (isOutsideBarrier()) {
+            if (Rs2GameObject.interact(ObjectID.BARRIER_43700, "quick-pass")) {
+                Rs2Player.waitForWalking();
+            }
+        }
+
+        if (!isOutsideBarrier()) {
+            if (!Rs2Inventory.hasItem("Uncharged cell")) {
+                takeUnchargedCells();
+            }
+            state = GotrState.WAITING;
         }
     }
 
@@ -287,7 +321,41 @@ public class GotrScript extends Script {
             state = GotrState.MINE_LARGE_GUARDIAN_REMAINS;
         }
     }
+      
+    private void handlePortalState() {
+        // Mine from huge guardian remains until inventory and pouches are full
+        if (mineHugeGuardianRemain()) {
+            return;
+        }
+        if (Rs2Inventory.anyPouchFull() && Rs2Inventory.isFull()) {
+            leaveHugeMine();
+            state = GotrState.ENTER_ALTAR;
+        }
+    }
 
+    private void handleOptimizationLoop() {
+        if (usePortal()) {
+            state = GotrState.PORTAL;
+            return;
+        }
+        if (powerUpGreatGuardian()) {
+            return;
+        }
+        if (depositRunesIntoPool()) {
+            return;
+        }
+        handleMining();
+    }
+
+    private void handleEndGame() {
+        if (timeout || (config.rune() != Combination.NONE && noBind)) {
+            state = GotrState.BANKING;
+            resetPlugin();
+        } else {
+            state = GotrState.WAITING;
+        }
+    }
+      
     private boolean initialize() {
         if (!initCheck) {
             initializeGuardianPortalInfo();
@@ -301,8 +369,12 @@ public class GotrScript extends Script {
                 configManager.setConfiguration(config.configGroup, "combination", Combination.NONE);
             }
             initCheck = true;
+            state = GotrState.ENTER_GAME;
         }
+        return initCheck;
+    }
 
+    private boolean preGameChecks() {
         if (!pouchCheck) {
             Rs2Inventory.checkPouches();
             sleep(Rs2Random.randomGaussian(1500, 300));
@@ -335,6 +407,14 @@ public class GotrScript extends Script {
         if (lootChisel()) return;
 
         if (waitingForGameToStart(timeToStart)) return;
+
+        if (isOutsideBarrier()) {
+            if (Rs2GameObject.interact(ObjectID.BARRIER_43700, "quick-pass")) {
+                Rs2Player.waitForWalking();
+            }
+        }
+
+        if (isOutsideBarrier()) return;
 
         if (!Rs2Inventory.hasItem("Uncharged cell") && !isInLargeMine() && !isInHugeMine()) {
             takeUnchargedCells();
@@ -375,7 +455,14 @@ public class GotrScript extends Script {
     private boolean waitingForGameToStart(int timeToStart) {
         if (isInHugeMine()) return false;
 
-        if (getStartTimer() > Rs2Random.randomGaussian(35, Rs2Random.between(1, 5)) || getStartTimer() == -1 || timeToStart > 10) {
+        int startTimer = getStartTimer();
+        // If the timer widget isn't visible and we're outside the barrier,
+        // return false so we attempt to enter the minigame first.
+        if (startTimer == -1 && isOutsideBarrier()) {
+            return false;
+        }
+
+        if (startTimer > Rs2Random.randomGaussian(35, Rs2Random.between(1, 5)) || startTimer == -1 || timeToStart > 10) {
 
             // Only take cells if we don't already have them
             if (!Rs2Inventory.hasItem("Uncharged cell")) {
@@ -482,6 +569,7 @@ public class GotrScript extends Script {
             Rs2Player.waitForWalking();
             sleepUntil(this::isInHugeMine);
             sleepUntil(() -> getGuardiansPower() > 0);
+            state = GotrState.PORTAL;
             return true;
         }
         return false;
@@ -745,6 +833,13 @@ public class GotrScript extends Script {
         }
 
         resetPlugin();
+        if (!isOutsideBarrier()) {
+            if (Rs2GameObject.interact(ObjectID.BARRIER_43700, "quick-pass")) {
+                Rs2Player.waitForWalking();
+                return true;
+            }
+        }
+
         if (state != GotrState.WAITING) {
             state = GotrState.WAITING;
             log("Make sure to start the script near the minigame barrier.");
@@ -762,8 +857,13 @@ public class GotrScript extends Script {
             }
         }
 
-        if (Rs2GameObject.interact(ObjectID.BARRIER_43700, "quick-pass")) {
-            Rs2Player.waitForWalking();
+        if (isOutsideBarrier()) {
+            if (Rs2GameObject.interact(ObjectID.BARRIER_43700, "quick-pass")) {
+                Rs2Player.waitForWalking();
+            }
+        }
+
+        if (!isOutsideBarrier()) {
             state = GotrState.ENTER_GAME;
             GotrScript.shouldMineGuardianRemains = true;
             log("Entering game...");
@@ -873,14 +973,13 @@ public class GotrScript extends Script {
     }
 
     private void handleMining() {
-        if (getGuardiansPower() > 70) {
-            if (Rs2Inventory.hasItemAmount(GUARDIAN_FRAGMENTS,
-                    Rs2Random.between(Rs2Inventory.getEmptySlots() + Rs2Inventory.getRemainingCapacityInPouches(),
-                            Rs2Inventory.getEmptySlots() + Rs2Inventory.getRemainingCapacityInPouches() + 3))) {
-                shouldMineGuardianRemains = false;
-            }
-        } else if (Rs2Inventory.hasItemAmount(GUARDIAN_FRAGMENTS, config.maxFragmentAmount())) {
+        int desired = desiredFragmentsFromPower();
+        if (getGuardiansPower() >= 95) {
             shouldMineGuardianRemains = false;
+        } else if (Rs2Inventory.hasItemAmount(GUARDIAN_FRAGMENTS, desired)) {
+            shouldMineGuardianRemains = false;
+        } else {
+            shouldMineGuardianRemains = true;
         }
 
         mineGuardianRemains();
@@ -927,6 +1026,7 @@ public class GotrScript extends Script {
     @Override
     public void shutdown() {
         state = GotrState.SHUTDOWN;
+        resetPlugin(GotrState.SHUTDOWN);
         super.shutdown();
     }
 
@@ -1038,7 +1138,17 @@ public class GotrScript extends Script {
         return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
     }
 
+    private int desiredFragmentsFromPower() {
+        int remaining = 100 - getGuardiansPower();
+        int blocks = (int) Math.ceil(remaining / 15.0);
+        return blocks * 40;
+    }
+
     public static void resetPlugin() {
+        resetPlugin(GotrState.ENTER_GAME);
+    }
+
+    public static void resetPlugin(GotrState nextState) {
         guardians.clear();
         activeGuardianPortals.clear();
         greatGuardian = null;
@@ -1055,6 +1165,7 @@ public class GotrScript extends Script {
     }
 
     public boolean handleBankRun() {
+        System.out.println("switching to BANKING state.");
         log("Switching to BANKING state.");
         state = GotrState.BANKING;
 
