@@ -16,6 +16,9 @@ public enum GotrState {
     LEAVING_ALTAR,
     POWERING_UP,
     CRAFT_GUARDIAN_ESSENCE,
+    PORTAL,
+    OPTIMIZATION_LOOP,
+    END_GAME,
     BANKING,
     SHUTDOWN;
 }
