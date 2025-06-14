@@ -137,6 +137,9 @@ public class GotrScript extends Script {
 
     public boolean run(GotrConfig config) {
         this.config = config;
+        if (state == null) {
+            state = GotrState.WAITING;
+        }
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
             try {
                 if (!Microbot.isLoggedIn()) return;
@@ -1035,6 +1038,7 @@ public class GotrScript extends Script {
         activeGuardianPortals.clear();
         greatGuardian = null;
         Microbot.getClient().clearHintArrow();
+        state = GotrState.WAITING;
     }
 
 
