@@ -6,6 +6,7 @@ import lombok.Getter;
 @AllArgsConstructor
 @Getter
 public enum GotrState {
+    INITIALIZE,
     ENTER_GAME,
     WAITING,
     MINE_LARGE_GUARDIAN_REMAINS,
@@ -15,5 +16,6 @@ public enum GotrState {
     LEAVING_ALTAR,
     POWERING_UP,
     CRAFT_GUARDIAN_ESSENCE,
-    BANKING;
+    BANKING,
+    SHUTDOWN;
 }

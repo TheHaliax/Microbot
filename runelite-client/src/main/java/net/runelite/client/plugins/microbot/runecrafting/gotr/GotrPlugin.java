@@ -14,6 +14,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.qualityoflife.scripts.pouch.PouchOverlay;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.plugins.microbot.runecrafting.gotr.GotrState;
 
 import javax.inject.Inject;
 import java.awt.*;
@@ -59,10 +60,12 @@ public class GotrPlugin extends Plugin {
             overlayManager.add(pouchOverlay);
             overlayManager.add(gotrOverlay);
         }
+        GotrScript.state = GotrState.INITIALIZE;
         gotrScript.run(config);
     }
 
     protected void shutDown() {
+        GotrScript.state = GotrState.SHUTDOWN;
         gotrScript.shutdown();
         overlayManager.remove(gotrOverlay);
     }
