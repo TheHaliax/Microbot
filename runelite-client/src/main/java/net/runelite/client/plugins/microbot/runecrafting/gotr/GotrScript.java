@@ -181,9 +181,7 @@ public class GotrScript extends Script {
     private void processState(int timeToStart) {
         switch (state) {
             case INITIALIZE:
-                if (initialize()) {
-                    state = GotrState.ENTER_GAME;
-                }
+                initialize();
                 break;
             case WAITING:
                 handleWaitingState(timeToStart);
@@ -206,11 +204,20 @@ public class GotrScript extends Script {
             case CRAFT_GUARDIAN_ESSENCE:
                 handleCraftEssenceState();
                 break;
+            case PORTAL:
+                handlePortalState();
+                break;
+            case OPTIMIZATION_LOOP:
+                handleOptimizationLoop();
+                break;
+            case END_GAME:
+                handleEndGame();
+                break;
             case BANKING:
                 handleBankRun();
                 break;
             case SHUTDOWN:
-                resetPlugin();
+                resetPlugin(GotrState.SHUTDOWN);
                 break;
             default:
                 state = GotrState.WAITING;
@@ -227,6 +234,11 @@ public class GotrScript extends Script {
     }
 
     private void handleEnterGameState() {
+        if (!preGameChecks()) {
+            state = GotrState.SHUTDOWN;
+            return;
+        }
+
         if (timeout || (config.rune() != Combination.NONE && noBind)) {
             state = GotrState.BANKING;
             resetPlugin();
@@ -302,6 +314,40 @@ public class GotrScript extends Script {
         }
     }
 
+    private void handlePortalState() {
+        // Mine from huge guardian remains until inventory and pouches are full
+        if (mineHugeGuardianRemain()) {
+            return;
+        }
+        if (Rs2Inventory.anyPouchFull() && Rs2Inventory.isFull()) {
+            leaveHugeMine();
+            state = GotrState.ENTER_ALTAR;
+        }
+    }
+
+    private void handleOptimizationLoop() {
+        if (usePortal()) {
+            state = GotrState.PORTAL;
+            return;
+        }
+        if (powerUpGreatGuardian()) {
+            return;
+        }
+        if (depositRunesIntoPool()) {
+            return;
+        }
+        handleMining();
+    }
+
+    private void handleEndGame() {
+        if (timeout || (config.rune() != Combination.NONE && noBind)) {
+            state = GotrState.BANKING;
+            resetPlugin();
+        } else {
+            state = GotrState.WAITING;
+        }
+    }
+
     private boolean initialize() {
         if (!initCheck) {
             initializeGuardianPortalInfo();
@@ -315,8 +361,12 @@ public class GotrScript extends Script {
                 configManager.setConfiguration(config.configGroup, "combination", Combination.NONE);
             }
             initCheck = true;
+            state = GotrState.ENTER_GAME;
         }
+        return initCheck;
+    }
 
+    private boolean preGameChecks() {
         if (!pouchCheck) {
             Rs2Inventory.checkPouches();
             sleep(Rs2Random.randomGaussian(1500, 300));
@@ -511,6 +561,7 @@ public class GotrScript extends Script {
             Rs2Player.waitForWalking();
             sleepUntil(this::isInHugeMine);
             sleepUntil(() -> getGuardiansPower() > 0);
+            state = GotrState.PORTAL;
             return true;
         }
         return false;
@@ -914,14 +965,13 @@ public class GotrScript extends Script {
     }
 
     private void handleMining() {
-        if (getGuardiansPower() > 70) {
-            if (Rs2Inventory.hasItemAmount(GUARDIAN_FRAGMENTS,
-                    Rs2Random.between(Rs2Inventory.getEmptySlots() + Rs2Inventory.getRemainingCapacityInPouches(),
-                            Rs2Inventory.getEmptySlots() + Rs2Inventory.getRemainingCapacityInPouches() + 3))) {
-                shouldMineGuardianRemains = false;
-            }
-        } else if (Rs2Inventory.hasItemAmount(GUARDIAN_FRAGMENTS, config.maxFragmentAmount())) {
+        int desired = desiredFragmentsFromPower();
+        if (getGuardiansPower() >= 95) {
             shouldMineGuardianRemains = false;
+        } else if (Rs2Inventory.hasItemAmount(GUARDIAN_FRAGMENTS, desired)) {
+            shouldMineGuardianRemains = false;
+        } else {
+            shouldMineGuardianRemains = true;
         }
 
         mineGuardianRemains();
@@ -967,7 +1017,7 @@ public class GotrScript extends Script {
 
     @Override
     public void shutdown() {
-        state = GotrState.SHUTDOWN;
+        resetPlugin(GotrState.SHUTDOWN);
         super.shutdown();
     }
 
@@ -1079,12 +1129,22 @@ public class GotrScript extends Script {
         return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
     }
 
+    private int desiredFragmentsFromPower() {
+        int remaining = 100 - getGuardiansPower();
+        int blocks = (int) Math.ceil(remaining / 15.0);
+        return blocks * 40;
+    }
+
     public static void resetPlugin() {
+        resetPlugin(GotrState.ENTER_GAME);
+    }
+
+    public static void resetPlugin(GotrState nextState) {
         guardians.clear();
         activeGuardianPortals.clear();
         greatGuardian = null;
         Microbot.getClient().clearHintArrow();
-        state = GotrState.ENTER_GAME;
+        state = nextState;
     }
 
 

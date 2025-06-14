@@ -64,6 +64,7 @@ public class GotrPlugin extends Plugin {
 
     protected void shutDown() {
         GotrScript.state = GotrState.SHUTDOWN;
+        GotrScript.resetPlugin(GotrState.SHUTDOWN);
         gotrScript.shutdown();
         overlayManager.remove(gotrOverlay);
     }
