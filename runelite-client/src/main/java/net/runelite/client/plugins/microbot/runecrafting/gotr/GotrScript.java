@@ -160,16 +160,7 @@ public class GotrScript extends Script {
                     }
                 }
 
-                boolean isInMinigame = !isOutsideBarrier() && isInMainRegion();
-
-                if (isInMinigame) {
-                    handleMinigame(timeToStart);
-                    return;
-                }
-
-                if (craftRunes()) return;
-                if (enterMinigame()) return;
-                if (waitForMinigameToStart()) return;
+                processState(timeToStart);
 
                 long endTime = System.currentTimeMillis();
                 totalTime = endTime - startTime;
@@ -181,6 +172,112 @@ public class GotrScript extends Script {
             }
         }, 0, 100, TimeUnit.MILLISECONDS);
         return true;
+    }
+
+    private void processState(int timeToStart) {
+        switch (state) {
+            case WAITING:
+                handleWaitingState(timeToStart);
+                break;
+            case ENTER_GAME:
+                handleEnterGameState();
+                break;
+            case MINE_LARGE_GUARDIAN_REMAINS:
+            case LEAVING_LARGE_MINE:
+                handleMiningState();
+                break;
+            case ENTER_ALTAR:
+            case CRAFTING_RUNES:
+            case LEAVING_ALTAR:
+                handleAltarState();
+                break;
+            case POWERING_UP:
+                handlePowerUpState();
+                break;
+            case CRAFT_GUARDIAN_ESSENCE:
+                handleCraftEssenceState();
+                break;
+            case BANKING:
+                handleBankRun();
+                break;
+            default:
+                state = GotrState.WAITING;
+                break;
+        }
+    }
+
+    private void handleWaitingState(int timeToStart) {
+        if (!waitingForGameToStart(timeToStart)) {
+            if (enterMinigame()) {
+                state = GotrState.ENTER_GAME;
+            }
+        }
+    }
+
+    private void handleEnterGameState() {
+        if (!Rs2Inventory.hasItem("Uncharged cell")) {
+            takeUnchargedCells();
+            return;
+        }
+
+        if (!isInLargeMine() && !isInHugeMine()) {
+            state = GotrState.MINE_LARGE_GUARDIAN_REMAINS;
+        }
+    }
+
+    private void handleMiningState() {
+        if (lootChisel()) return;
+
+        if (usePortal()) return;
+
+        if (mineHugeGuardianRemain()) return;
+
+        if (powerUpGreatGuardian()) return;
+
+        if (repairCells()) return;
+
+        if (!shouldMineGuardianRemains) {
+            if (isOutOfFragments()) return;
+
+            if (needsDeposit) {
+                if (depositRunesIntoPool()) {
+                    needsDeposit = false;
+                }
+            }
+
+            if (!Rs2Inventory.isFull() && !optimizedEssenceLoop) {
+                if (leaveLargeMine()) return;
+
+                if (state == GotrState.CRAFT_GUARDIAN_ESSENCE && (Rs2Player.isAnimating() || Rs2Player.isMoving())) return;
+
+                if (craftGuardianEssences()) return;
+
+            } else if (Rs2Inventory.hasItem(GUARDIAN_ESSENCE)) {
+                if (enterAltar()) {
+                    state = GotrState.ENTER_ALTAR;
+                    return;
+                }
+                if (leaveLargeMine()) return;
+            }
+        } else {
+            handleMining();
+        }
+    }
+
+    private void handleAltarState() {
+        craftRunes();
+    }
+
+    private void handlePowerUpState() {
+        if (powerUpGreatGuardian()) {
+            state = GotrState.MINE_LARGE_GUARDIAN_REMAINS;
+        }
+    }
+
+    private void handleCraftEssenceState() {
+        if (craftGuardianEssences()) {
+            state = GotrState.MINE_LARGE_GUARDIAN_REMAINS;
+        }
     }
 
     private boolean initialize() {
