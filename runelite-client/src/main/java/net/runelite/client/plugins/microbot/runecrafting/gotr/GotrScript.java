@@ -749,6 +749,13 @@ public class GotrScript extends Script {
         }
 
         resetPlugin();
+        if (!isOutsideBarrier()) {
+            if (Rs2GameObject.interact(ObjectID.BARRIER_43700)) {
+                Rs2Player.waitForWalking();
+                return true;
+            }
+        }
+
         if (state != GotrState.WAITING) {
             state = GotrState.WAITING;
             log("Make sure to start the script near the minigame barrier.");
@@ -766,8 +773,13 @@ public class GotrScript extends Script {
             }
         }
 
-        if (Rs2GameObject.interact(ObjectID.BARRIER_43700, "quick-pass")) {
-            Rs2Player.waitForWalking();
+        if (isOutsideBarrier()) {
+            if (Rs2GameObject.interact(ObjectID.BARRIER_43700)) {
+                Rs2Player.waitForWalking();
+            }
+        }
+
+        if (!isOutsideBarrier()) {
             state = GotrState.ENTER_GAME;
             GotrScript.shouldMineGuardianRemains = true;
             log("Entering game...");
@@ -1083,7 +1095,7 @@ public class GotrScript extends Script {
         }
 
         if (!isOutsideBarrier()) {
-            if (Rs2GameObject.interact(ObjectID.BARRIER_43700, "quick-pass")) {
+            if (Rs2GameObject.interact(ObjectID.BARRIER_43700)) {
                 Rs2Player.waitForWalking();
                 return false;
             }
