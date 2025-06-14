@@ -137,6 +137,9 @@ public class GotrScript extends Script {
 
     public boolean run(GotrConfig config) {
         this.config = config;
+        if (state == null) {
+            state = GotrState.INITIALIZE;
+        }
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
             try {
                 if (!Microbot.isLoggedIn()) return;
@@ -165,6 +168,7 @@ public class GotrScript extends Script {
                 long endTime = System.currentTimeMillis();
                 totalTime = endTime - startTime;
                 System.out.println("Total time for loop " + totalTime);
+                log("Total time for loop " + totalTime);
 
             } catch (Exception ex) {
                 log("Something went wrong in the GOTR Script: " + ex.getMessage() + ". If the script is stuck, please contact us on discord with this log.");
@@ -176,6 +180,11 @@ public class GotrScript extends Script {
 
     private void processState(int timeToStart) {
         switch (state) {
+            case INITIALIZE:
+                if (initialize()) {
+                    state = GotrState.WAITING;
+                }
+                break;
             case WAITING:
                 handleWaitingState(timeToStart);
                 break;
@@ -199,6 +208,9 @@ public class GotrScript extends Script {
                 break;
             case BANKING:
                 handleBankRun();
+                break;
+            case SHUTDOWN:
+                resetPlugin();
                 break;
             default:
                 state = GotrState.WAITING;
@@ -919,6 +931,7 @@ public class GotrScript extends Script {
     @Override
     public void shutdown() {
         state = null;
+        state = GotrState.SHUTDOWN;
         super.shutdown();
     }
 
@@ -1035,6 +1048,7 @@ public class GotrScript extends Script {
         activeGuardianPortals.clear();
         greatGuardian = null;
         Microbot.getClient().clearHintArrow();
+        state = GotrState.WAITING;
     }
 
 
@@ -1047,6 +1061,7 @@ public class GotrScript extends Script {
 
     public boolean handleBankRun() {
         System.out.println("switching to BANKING state.");
+        log("Switching to BANKING state.");
         state = GotrState.BANKING;
 
         if (!isInMainRegion()) {
