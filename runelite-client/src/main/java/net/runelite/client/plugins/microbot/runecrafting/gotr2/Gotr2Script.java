@@ -738,9 +738,6 @@ public class Gotr2Script extends Script {
         } else {
             //guardian parts
             if ((!Rs2Player.getSkillRequirement(Skill.AGILITY, 56)) && !Rs2Player.isAnimating() && getStartTimer() != -1 && !Rs2Inventory.hasItem(GUARDIAN_ESSENCE)) {
-                if(isInLargeMine()) {
-                    leaveLargeMine();
-                }
                 if (Rs2Equipment.isWearing("dragon pickaxe")) {
                     Rs2Combat.setSpecState(true, 1000);
                 }
