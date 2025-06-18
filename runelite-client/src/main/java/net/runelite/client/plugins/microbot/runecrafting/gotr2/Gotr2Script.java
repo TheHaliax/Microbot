@@ -9,8 +9,7 @@ import net.runelite.client.config.ConfigManager;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
-import net.runelite.client.plugins.microbot.runecrafting.gotr.GotrConfig;
-import net.runelite.client.plugins.microbot.runecrafting.gotr.GotrState;
+import net.runelite.client.plugins.microbot.breakhandler.BreakHandlerPlugin;
 import net.runelite.client.plugins.microbot.runecrafting.gotr2.Gotr2Config;
 import net.runelite.client.plugins.microbot.runecrafting.gotr2.Gotr2State;
 import net.runelite.client.plugins.microbot.runecrafting.gotr2.data.*;
@@ -29,7 +28,6 @@ import net.runelite.client.plugins.microbot.util.npc.Rs2NpcModel;
 import net.runelite.client.plugins.microbot.util.player.Rs2Player;
 import net.runelite.client.plugins.microbot.util.walker.Rs2Walker;
 import net.runelite.client.plugins.microbot.util.widget.Rs2Widget;
-import static net.runelite.client.plugins.microbot.util.Global.sleepUntilTrue;
 import net.runelite.client.plugins.microbot.breakhandler.BreakHandlerScript;
 import net.runelite.client.plugins.skillcalculator.skills.MagicAction;
 import org.jetbrains.annotations.Nullable;
@@ -44,24 +42,14 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static net.runelite.client.plugins.microbot.Microbot.log;
+import static net.runelite.client.plugins.microbot.runecrafting.gotr2.Gotr2State.*;
+import static net.runelite.client.plugins.microbot.runecrafting.gotr2.data.Combination.*;
 
 public class Gotr2Script extends Script {
 
     public static String version = "1.2.1";
     public static long totalTime = 0;
     public static boolean shouldMineGuardianRemains = true;
-    /**
-     * Indicates that all available pouches have been filled with essence.
-     * This prevents repeated attempts at filling while skilling until the
-     * pouches are emptied again when crafting runes.
-     */
-    public static boolean pouchesFilled = false;
-    /**
-     * Flag indicating whether a lack of guardian fragments has already been
-     * detected. Used to ensure related messages are logged only once until
-     * fragments are acquired again.
-     */
-    public static boolean outOfFragmentsDetected = false;
     public static final String rewardPointRegex = "Total elemental energy:[^>]+>([\\d,]+).*Total catalytic energy:[^>]+>([\\d,]+).";
     public static final Pattern rewardPointPattern = Pattern.compile(rewardPointRegex);
 
@@ -77,13 +65,13 @@ public class Gotr2Script extends Script {
     public static NPC greatGuardian;
     public static int elementalRewardPoints;
     public static int catalyticRewardPoints;
-    public static Gotr2State state;
-    public static Gotr2Config config;
+    public static net.runelite.client.plugins.microbot.runecrafting.gotr2.Gotr2State state;
+    public static net.runelite.client.plugins.microbot.runecrafting.gotr2.Gotr2Config config;;
     String GUARDIAN_FRAGMENTS = "guardian fragments";
     String GUARDIAN_ESSENCE = "guardian essence";
 
     boolean initCheck = false;
-    public static boolean optimizedEssenceLoop = false;
+    boolean optimizedEssenceLoop = false;
     boolean noBind = false;
     boolean timeout = false;
     boolean elemental = false;
@@ -120,7 +108,6 @@ public class Gotr2Script extends Script {
             ItemID.MIST_RUNE,
             ItemID.MUD_RUNE,
             ItemID.WRATH_RUNE);
-    private boolean pouchCheck;
 
     private void initializeGuardianPortalInfo() {
         guardianPortalInfo.put(ObjectID.GUARDIAN_OF_AIR, new GuardianPortalInfo("AIR", 1, ItemID.AIR_RUNE, 26887, 4353, RuneType.ELEMENTAL, CellType.WEAK, QuestState.FINISHED));
@@ -149,219 +136,229 @@ public class Gotr2Script extends Script {
                 long startTime = System.currentTimeMillis();
 
                 if (!initCheck) {
-                    if (!Rs2Inventory.hasItem("pickaxe") && !Rs2Equipment.isWearing("pickaxe")) {
-                        log("You need to have a pickaxe before you can participate in this minigame.");
-                        shutdown();
-                    }
                     initializeGuardianPortalInfo();
                     if (!Rs2Magic.isLunar()) {
                         log("Lunar spellbook not found...disabling npc contact");
                         useNpcContact = false;
-                        configManager.setConfiguration(config.configGroup, "combination", Combination.NONE);
+                        configManager.setConfiguration(config.configGroup, "combination", NONE);
                     }
                     var magicLevel = Microbot.getClient().getBoostedSkillLevel(Skill.MAGIC);
                     if (magicLevel < 82) {
-                        configManager.setConfiguration(config.configGroup, "combination", Combination.NONE);
+                        configManager.setConfiguration(config.configGroup, "combination", NONE);
                     }
-                    state = Gotr2State.INITIALIZED;
                     initCheck = true;
                 }
 
                 Rs2Walker.setTarget(null);
 
-                if (guardiansLoop()) return;
+                if (!Rs2Inventory.hasItem("pickaxe") && !Rs2Equipment.isWearing("pickaxe")) {
+                    log("You need to have a pickaxe before you can participate in this minigame.");
+                    return;
+                }
 
-//                shut down should set state to shut down
-//                startup should set state initialize
-//                initialize should run only the original init check revert this change back to initialize guardian portal info if ! not lunarmagic magic level lower than 82 and then set state to enter minigame
-//                enter minigame should check if not banking or breaking and enter the barrier if a bank or break is called for state should be changed to banking then reset plugin should be called
-//                reset plugin should return to enter minigame state which will again check for bank or break and interact with the portal with wait for walking and if !notoutside barrier is detected  it will take 10 uncharged cells and change state to waiting
-//                waiting will check for the banking or breaking calls or direct the player to the large mine if agility is high enough or guardian parts if not then start mining as soon as the minigame starts
-//                mining state will go until first portal which will set portal state
-//                portal state will direct player into the portal and have them mine huge guardian remain until the no animation then fill pouch on repeat until pouches full and inventory full then leave huge mine and set enter altar state
-//                enter altar state will detect the active altars in main game area using the getavailable alatrs and enter that altar then set state to crafting runes
-//                craftign runes will find the rcaltar in the location and craft runes on it if NONE or use available combinations based on the other Enums in Combination using magic imbue before using the available rune on the altar and then set state to leaving altar
-//                leavign altar will; find the exit portal and take the player out and when in main game area change state to optimization loop
-//                optimization loop will first check for any portals and set portal state if there are any  if not it will then powerupguardian then charge tile then deposit runes and then run a check of the fragments in inventory against the remaining percent of guardian power we want about 40fragments per 15% of guardian power remaining till 100 if we have more set state to craft essence if we have less set state to mining
-//                craft essenmce state will craft essence until xp drops stop fill pouch and repeat until pouches full and inventory full then set state to enter altar
-//                mining state will check if first portal has occured if it has it will mine until a portal or fragments until the desired 40fragments per 15% of guardian power remaining till 100 unless power is over 95
-//                a constant power check will set state to end game and run a break and bank check before setting the state to waiting
+                if (Rs2Inventory.hasItem(ItemID.BINDING_NECKLACE)) {
+                    Rs2Inventory.wear(ItemID.BINDING_NECKLACE);
+                    sleepUntil(() -> Rs2Equipment.isWearing(ItemID.BINDING_NECKLACE), 2000);
+                }
 
+                noBind = !Rs2Inventory.hasItem(ItemID.BINDING_NECKLACE) && !Rs2Equipment.isWearing(ItemID.BINDING_NECKLACE);
+
+                if (!isBreakHandlerEnabled()){
+                    timeout =false;
+                } else if (BreakHandlerScript.breakIn <= 300) {
+                    BreakHandlerScript.setLockState(true);
+                    timeout = true;
+                }
+
+                if (Rs2Inventory.anyPouchUnknown()) {
+                    Rs2Inventory.checkPouches();
+                    sleep(Rs2Random.randomGaussian(1500, 300));
+                    return; // bail from this loop iteration to avoid repeating logic on unknown state
+                }
+
+                //IS INSIDE THE MINIGAME
+                int timeToStart = 0;
+                if (nextGameStart.isPresent()) {
+                    timeToStart = ((int) ChronoUnit.SECONDS.between(Instant.now(), nextGameStart.get()));
+                }
+
+                if (Rs2Inventory.hasItem("portal talisman") && !Rs2Inventory.hasItem(GUARDIAN_ESSENCE) && !Rs2Inventory.anyPouchFull()) {
+                    Rs2Inventory.drop("portal talisman");
+                    log("Dropping portal talisman...");
+                }
+                //Repair colossal pouch asap to avoid disintegrate completely
+                if (Rs2Inventory.hasItem("colossal pouch") && Rs2Inventory.hasDegradedPouch()) {
+                    if (!repairPouches()) {
+                        return;
+                    }
+                }
+
+                boolean isInMinigame = !isOutsideBarrier() && isInMainRegion();
+
+                if (isInMinigame) {
+
+                    if (lootChisel()) return;
+
+                    if (waitingForGameToStart(timeToStart)) return;
+
+                    if (!Rs2Inventory.hasItem("Uncharged cell") && !isInLargeMine() && !isInHugeMine()) {
+                        takeUnchargedCells();
+                        return;
+                    }
+
+                    if (usePortal()) return;
+                    //mine huge guardian remains
+                    if (mineHugeGuardianRemain()) return;
+
+                    if (powerUpGreatGuardian()) return;
+                    if (repairCells()) return;
+
+                    if (!shouldMineGuardianRemains) {
+                        //Create fragments into whatever
+                        if (isOutOfFragments()) return;
+
+                        if (needsDeposit) {
+                            if (depositRunesIntoPool()) {
+                                needsDeposit = false;
+                            }
+                        }
+
+                        //deposit runes
+//                        if (depositRunesIntoPool()) return;
+
+                        if (fillPouches()) {
+                            craftGuardianEssences();
+                            return;
+                        }
+                        if (!Rs2Inventory.isFull() && !optimizedEssenceLoop) {
+                            if (leaveLargeMine()) return;
+
+                            if (state == CRAFT_GUARDIAN_ESSENCE && (Rs2Player.isAnimating() || Rs2Player.isMoving())) return;
+
+                            if (craftGuardianEssences()) return;
+
+                        } else if (Rs2Inventory.hasItem(GUARDIAN_ESSENCE)) {
+                            if (leaveLargeMine()) return;
+                            if (enterAltar()) return;
+                        }
+                    } else {
+                        if (getGuardiansPower() > 70) {
+                            if (Rs2Inventory.hasItemAmount(GUARDIAN_FRAGMENTS, Rs2Random.between(Rs2Inventory.getEmptySlots()+Rs2Inventory.getRemainingCapacityInPouches(), Rs2Inventory.getEmptySlots()+Rs2Inventory.getRemainingCapacityInPouches()+3))) {
+                                shouldMineGuardianRemains = false;
+                            }
+                        } else {
+                            if (Rs2Inventory.hasItemAmount(GUARDIAN_FRAGMENTS, config.maxFragmentAmount())) {
+                                shouldMineGuardianRemains = false;
+                            }
+                        }
+                        mineGuardianRemains();
+                    }
+                    return;
+                }
+
+                //IS NOT IN THE MINIGAME
+
+                if (craftRunes()) return;
+
+                if (enterMinigame()) return;
+
+                if (waitForMinigameToStart()) return;
 
                 long endTime = System.currentTimeMillis();
                 totalTime = endTime - startTime;
                 System.out.println("Total time for loop " + totalTime);
 
             } catch (Exception ex) {
-                Microbot.log("Something went wrong in the GOTR Script: " + ex.getMessage() + ". If the script is stuck, please contact us on discord with this log.");
+                log("Something went wrong in the GOTR Script: " + ex.getMessage() + ". If the script is stuck, please contact us on discord with this log.");
                 ex.printStackTrace();
             }
         }, 0, 100, TimeUnit.MILLISECONDS);
         return true;
     }
 
-    public boolean guardiansLoop() {
-        switch (state) {
-            case INITIALIZE:
-            case INITIALIZED:
-                return handleNotInGame();
+    private boolean waitingForGameToStart(int timeToStart) {
+        if (isInHugeMine()) return false;
 
-            case ENTER_GAME:
-                return handleEnterGame();
+        if (getStartTimer() > Rs2Random.randomGaussian(35, Rs2Random.between(1, 5)) || getStartTimer() == -1 || timeToStart > 10) {
 
-            case WAITING:
-                return handleWaiting();
+            // Only take cells if we don't already have them
+            if (!Rs2Inventory.hasItem("Uncharged cell")) {
+                // If in large mine and need cells, leave first
+                if (isInLargeMine()) {
+                    if (leaveLargeMine()) return true;
+                }
+                takeUnchargedCells();
+                // Return to large mine if we were there before
+                if (!isInLargeMine() && shouldMineGuardianRemains) {
+                    if (Rs2Walker.walkTo(new WorldPoint(3632, 9503, 0), 20)) {
+                        Rs2GameObject.interact(ObjectID.RUBBLE_43724);
+                        return true;
+                    }
+                }
+            }
 
-            case PORTAL:
-                return handlePortal();
+            repairPouches();
 
-            case ENTER_ALTAR:
-                return handleEnterAltar();
+            if (!shouldMineGuardianRemains) return true;
 
-            case CRAFTING_RUNES:
-                return handleCraftingRunes();
-
-            case LEAVING_ALTAR:
-                return handleLeavingAltar();
-
-            case POWERING_UP:
-                return handlePoweringUp();
-
-            case CRAFT_GUARDIAN_ESSENCE:
-                return handleCraftEssence();
-
-            case MINE_LARGE_GUARDIAN_REMAINS:
-                return handleMining();
-
-            case OPTIMIZATION_LOOP:
-                return handleOptimizationLoop();
-
-            case END_GAME:
-                return handleEndGame();
-
-            case BANKING:
-                return handleBanking();
-
-            case SHUTDOWN:
-                return false;
+            mineGuardianRemains();
+            return true;
         }
         return false;
     }
 
-    private boolean handleNotInGame() {
-        if (craftRunes()) return true;
-        if (enterMinigame()) return true;
-        return waitForMinigameToStart();
-    }
+    private boolean repairCells() {
+        Rs2ItemModel cell = Rs2Inventory.get(CellType.PoweredCellList().toArray(Integer[]::new));
+        if (cell != null && isInMainRegion() && isInMiniGame() && !shouldMineGuardianRemains && !isInLargeMine() && !isInHugeMine()) {
+            int cellTier = CellType.GetCellTier(cell.getId());
+            List<Integer> shieldCellIds = Rs2GameObject.getObjectIdsByName("cell_tile");
 
-    private boolean handleEnterGame() {
-        if (!Rs2Inventory.hasItem("Uncharged cell")) {
-            takeUnchargedCells();
-        }
-        state = Gotr2State.WAITING;
-        return true;
-    }
-
-    private boolean handleWaiting() {
-        int timeToStart = nextGameStart.map(n -> (int) ChronoUnit.SECONDS.between(Instant.now(), n)).orElse(0);
-        if (waitingForGameToStart(timeToStart)) {
+            if (Rs2Inventory.hasItemAmount(GUARDIAN_ESSENCE, 10)) {
+                for (int shieldCellId : shieldCellIds) {
+                    TileObject shieldCell = Rs2GameObject.getTileObject(shieldCellId);
+                    if (shieldCell == null) continue;
+                    if (CellType.GetShieldTier(shieldCell.getId()) < cellTier) {
+                        log("Upgrading power cell at " + shieldCell.getWorldLocation());
+                        Rs2GameObject.interact(shieldCell, "Place-cell");
+                        sleepUntil(() -> !Rs2Player.isMoving());
+                        return true;
+                    }
+                }
+            }
+            shieldCellIds = shieldCellIds.stream().filter(id -> id != ObjectID.CELL_TILE_BROKEN).collect(Collectors.toList());
+            int interactedObjectId = Rs2GameObject.interact(shieldCellIds);
+            if (interactedObjectId != -1) {
+                log("Using cell with id " + interactedObjectId);
+                sleep(Rs2Random.randomGaussian(1000, 300));
+                sleepUntil(() -> !Rs2Player.isMoving());
+            }
             return true;
         }
-        state = Gotr2State.OPTIMIZATION_LOOP;
-        return true;
+        return false;
     }
 
-    private boolean handlePortal() {
-        if (mineHugeGuardianRemain()) return true;
-        if (Rs2Inventory.allPouchesFull() || Rs2Inventory.isFull()) {
-            leaveHugeMine();
-            state = Gotr2State.ENTER_ALTAR;
-        }
-        return true;
-    }
-
-    private boolean handleEnterAltar() {
-        if (enterAltar()) return true;
-        state = Gotr2State.CRAFTING_RUNES;
-        return true;
-    }
-
-    private boolean handleCraftingRunes() {
-        if (craftRunes()) return true;
-        state = Gotr2State.LEAVING_ALTAR;
-        return true;
-    }
-
-    private boolean handleLeavingAltar() {
-        TileObject portal = findPortalToLeaveAltar();
-        if (portal != null && Rs2GameObject.interact(portal.getId())) {
-            sleepUntilTrue(Gotr2Script::isInMainRegion,100,10000);
-        }
-        state = Gotr2State.OPTIMIZATION_LOOP;
-        return true;
-    }
-
-    private boolean handleOptimizationLoop() {
-        if (usePortal()) {
-            state = Gotr2State.PORTAL;
+    private boolean powerUpGreatGuardian() {
+        if (Rs2Inventory.hasItem("guardian stone") && !shouldMineGuardianRemains && !isInLargeMine() && !isInHugeMine()) {
+            state = POWERING_UP;
+            Rs2Npc.interact("The great guardian", "power-up");
+            log("Powering up the great guardian...");
+            sleepUntil(Rs2Player::isAnimating);
+            sleep(Rs2Random.randomGaussian(Rs2Random.between(1000, 2000), Rs2Random.between(100, 300)));
             return true;
         }
-        if (mineHugeGuardianRemain()) return true;
-        if (powerUpGreatGuardian()) return true;
-        if (repairCells()) return true;
-        if (!shouldMineGuardianRemains) {
-            if (isOutOfFragments()) return true;
-            if (depositRunesIntoPool()) return true;
-            if (fillPouches()) {
-                craftGuardianEssences();
-                return true;
-            }
-            if (!Rs2Inventory.isFull() && !optimizedEssenceLoop) {
-                if (leaveLargeMine()) return true;
-                if (craftGuardianEssences()) return true;
-            } else if (Rs2Inventory.hasItem(GUARDIAN_ESSENCE)) {
-                if (leaveLargeMine()) return true;
-                if (enterAltar()) return true;
-            }
-        } else {
-            mineGuardianRemains();
-        }
-        return true;
-    }
-
-    private boolean handleMining() {
-        mineGuardianRemains();
-        return true;
-    }
-
-    private boolean handleCraftEssence() {
-        craftGuardianEssences();
-        return true;
-    }
-
-    private boolean handlePoweringUp() {
-        powerUpGreatGuardian();
-        return true;
-    }
-
-    private boolean handleEndGame() {
-        // Placeholder for end of game logic
-        state = Gotr2State.WAITING;
-        return true;
-    }
-
-    private boolean handleBanking() {
-        // Placeholder for banking logic
-        return true;
+        return false;
     }
 
     private void takeUnchargedCells() {
+
         if (!Rs2Inventory.hasItem("Uncharged cell")) {
+            // Drop one guardian essence if inventory is full
             if (Rs2Inventory.isFull()) {
                 if (Rs2Inventory.drop(ItemID.GUARDIAN_ESSENCE)) {
-                    Microbot.log("Dropped one Guardian essence to make space for Uncharged cell");
+                    log("Dropped one Guardian essence to make space for Uncharged cell");
                 }
             }
+
             Rs2GameObject.interact(ObjectID.UNCHARGED_CELLS_43732, "Take-10");
             log("Taking uncharged cells...");
             Rs2Player.waitForAnimation();
@@ -395,9 +392,10 @@ public class Gotr2Script extends Script {
     }
 
     private boolean depositRunesIntoPool() {
-        if (config.shouldDepositRunes() && Rs2Inventory.hasItem(runeIds.toArray(Integer[]::new)) && !isInLargeMine() && !isInHugeMine() && !Rs2Inventory.isFull() && !optimizedEssenceLoop) {
+        if (config.shouldDepositRunes() && !isInLargeMine() && !isInHugeMine() && !Rs2Inventory.isFull() && !optimizedEssenceLoop) {
             if (Rs2Player.isMoving()) return true;
             if (Rs2GameObject.interact(ObjectID.DEPOSIT_POOL)) {
+                Rs2Inventory.waitForInventoryChanges(5000);
                 log("Deposit runes into pool...");
                 sleep(600, 2400);
             }
@@ -411,22 +409,26 @@ public class Gotr2Script extends Script {
         if (availableAltar != null && !Rs2Player.isMoving()) {
             log("Entering with altar " + availableAltar.getId());
             Rs2GameObject.interact(availableAltar);
-            state = Gotr2State.ENTER_ALTAR;
+            state = ENTER_ALTAR;
             Global.sleepUntil(() -> !isInMainRegion() || !Objects.equals(getAvailableAltars().stream().findFirst().orElse(null), availableAltar), 5000);
             sleep(Rs2Random.randomGaussian(1000, 300));
+
             return true;
         }
         return false;
     }
 
     private boolean craftGuardianEssences() {
+        if (!Rs2Inventory.hasItem(GUARDIAN_FRAGMENTS)) {
+            return false;
+        }
         if (Rs2GameObject.interact(ObjectID.WORKBENCH_43754)) {
-            state = Gotr2State.CRAFT_GUARDIAN_ESSENCE;
+            state = CRAFT_GUARDIAN_ESSENCE;
             sleep(Rs2Random.randomGaussian(Rs2Random.between(600, 900), Rs2Random.between(150, 300)));
             log("Crafting guardian essences...");
             return true;
         }
-        return false;
+       return false;
     }
 
     private boolean leaveLargeMine() {
@@ -434,7 +436,7 @@ public class Gotr2Script extends Script {
             Rs2GameObject.interact(ObjectID.RUBBLE_43726);
             Rs2Player.waitForAnimation();
             log("Leaving large mine...");
-            state = Gotr2State.LEAVING_LARGE_MINE;
+            state = LEAVING_LARGE_MINE;
             return true;
         }
         return false;
@@ -450,6 +452,10 @@ public class Gotr2Script extends Script {
     }
 
     private boolean isOutOfFragments() {
+        if ((Rs2Inventory.hasItem(GUARDIAN_ESSENCE)) && (!Rs2Inventory.hasItem(GUARDIAN_FRAGMENTS))) {
+            craftRunes();
+            return false;
+        }
         if ((!Rs2Inventory.hasItem(GUARDIAN_FRAGMENTS) && !Rs2Inventory.isFull()) || (getTimeSincePortal() > 85 && !Rs2Inventory.hasItem(GUARDIAN_ESSENCE))) {
             shouldMineGuardianRemains = true;
             if(!Rs2Inventory.hasItem(GUARDIAN_FRAGMENTS))
@@ -461,70 +467,196 @@ public class Gotr2Script extends Script {
     }
 
     private boolean craftRunes() {
-        if (!isInMainRegion() && isInMiniGame()) {
-            TileObject rcAltar = findRcAltar();
-            if (rcAltar != null) {
-                if (Rs2Player.isMoving()) return true;
+        Integer runeId = finalRune(config.rune());
+        Integer[] altarIds = new Integer[] {ObjectID.ALTAR_34760, ObjectID.ALTAR_34761, ObjectID.ALTAR_34762, ObjectID.ALTAR_34763, ObjectID.ALTAR_34764,
+                ObjectID.ALTAR_34765, ObjectID.ALTAR_34766, ObjectID.ALTAR_34767, ObjectID.ALTAR_34768, ObjectID.ALTAR_34769, ObjectID.ALTAR_34770,
+                ObjectID.ALTAR_34771, ObjectID.ALTAR_34772, ObjectID.ALTAR_43479};
+        GameObject rcAltar = Rs2GameObject.findObject(altarIds);
+        if (rcAltar != null) {
+            int altarID = rcAltar.getId();
+            switch (altarID) {
+                case ObjectID.ALTAR_34760: // air
+                    elemental = true;
+                    water = true;
+                    fire = true;
+                    earth = true;
+                    air = false;
+                    airAltar = true;
+                    waterAltar = false;
+                    earthAltar = false;
+                    fireAltar = false;
+                    break;
+                case ObjectID.ALTAR_34762: // water
+                    elemental = true;
+                    air = true;
+                    fire = true;
+                    earth = true;
+                    water = false;
+                    airAltar = false;
+                    waterAltar = true;
+                    earthAltar = false;
+                    fireAltar = false;
+                    break;
+                case ObjectID.ALTAR_34763: // earth
+                    elemental = true;
+                    water = true;
+                    fire = true;
+                    air = true;
+                    earth = false;
+                    airAltar = false;
+                    waterAltar = false;
+                    earthAltar = true;
+                    fireAltar = false;
+                    break;
+                case ObjectID.ALTAR_34764: // fire
+                    elemental = true;
+                    water = true;
+                    air = true;
+                    earth = true;
+                    fire = false;
+                    airAltar = false;
+                    waterAltar = false;
+                    earthAltar = false;
+                    fireAltar = true;
+                    break;
+                default:
+                    elemental = false;
+                    air = false;
+                    water = false;
+                    earth = false;
+                    fire = false;
+                    airAltar = false;
+                    waterAltar = false;
+                    earthAltar = false;
+                    fireAltar = false;
+                    break;
+            }
+            if (runeId != null) {
+                if (config.rune() != Combination.NONE) {
+                    if (!Rs2Inventory.hasItem(ItemID.AIR_RUNE) && !Rs2Inventory.hasItem(ItemID.WATER_RUNE) && !Rs2Inventory.hasItem(ItemID.EARTH_RUNE) && !Rs2Inventory.hasItem(ItemID.FIRE_RUNE)) {
+                        configManager.setConfiguration(config.configGroup, "combination", Combination.NONE);
+                        return true;
+                    }
+                }
+                if (config.rune() != Combination.NONE && !noBind && elemental) {
+                    if (!isInMainRegion() && isInMiniGame()) {
+                        if (Rs2Player.isMoving()) {
+                            return true;
+                        }
+                        if (Rs2Inventory.anyPouchFull() && !Rs2Inventory.isFull()) {
+                            Rs2Inventory.emptyPouches();
+                            Rs2Inventory.waitForInventoryChanges(5000);
+                            sleep(Rs2Random.randomGaussian(350, 150));
+                        }
+                        if (Rs2Inventory.hasItem(GUARDIAN_ESSENCE)) {
+                            state = CRAFTING_RUNES;
+                            optimizedEssenceLoop = false;
+                            if (Rs2Magic.quickCanCast(MagicAction.MAGIC_IMBUE)) {
+                                Rs2Magic.cast(MagicAction.MAGIC_IMBUE);
+                            }
+                            Rs2Inventory.interact(runeId, "use");
+                            Rs2GameObject.interact(rcAltar.getId());
+                            log("Combining runes on altar " + rcAltar.getId());
+                            sleep(Rs2Random.randomGaussian(Rs2Random.between(1000, 1500), 300));
+                            return true;
+                        } else if (!Rs2Player.isMoving()) {
+                            needsDeposit = true;
+                            state = LEAVING_ALTAR;
+                            TileObject rcPortal = findPortalToLeaveAltar();
+                            if (Rs2GameObject.interact(rcPortal.getId())) {
+                                log("Leaving the altar...");
+                                sleepUntilTrue(Gotr2Script::isInMainRegion, 100, 10000);
+                                sleep(Rs2Random.randomGaussian(750, 150));
+                            }
+                        }
+                        return true;
+                    }
+                    return false;
+                }
+            }
+            if (!isInMainRegion() && isInMiniGame()) {
+                if (Rs2Player.isMoving()) {
+                    return true;
+                }
                 if (Rs2Inventory.anyPouchFull() && !Rs2Inventory.isFull()) {
                     Rs2Inventory.emptyPouches();
                     Rs2Inventory.waitForInventoryChanges(5000);
                     sleep(Rs2Random.randomGaussian(350, 150));
                 }
                 if (Rs2Inventory.hasItem(GUARDIAN_ESSENCE)) {
-                    state = Gotr2State.CRAFTING_RUNES;
+                    state = CRAFTING_RUNES;
                     optimizedEssenceLoop = false;
                     Rs2GameObject.interact(rcAltar.getId());
                     log("Crafting runes on altar " + rcAltar.getId());
                     sleep(Rs2Random.randomGaussian(Rs2Random.between(1000, 1500), 300));
                 } else if (!Rs2Player.isMoving()) {
-                    state = Gotr2State.LEAVING_ALTAR;
+                    needsDeposit = true;
+                    state = LEAVING_ALTAR;
                     TileObject rcPortal = findPortalToLeaveAltar();
                     if (Rs2GameObject.interact(rcPortal.getId())) {
                         log("Leaving the altar...");
-                        sleepUntilTrue(Gotr2Script::isInMainRegion,100,10000);
+                        sleepUntilTrue(Gotr2Script::isInMainRegion, 100, 10000);
                         sleep(Rs2Random.randomGaussian(750, 150));
                     }
                 }
                 return true;
             }
+            return false;
         }
         return false;
     }
 
-    private static boolean waitForMinigameToStart() {
+    private boolean waitForMinigameToStart() {
+
         if (!isInMainRegion()) {
             TileObject rcPortal = findPortalToLeaveAltar();
             if (rcPortal != null && Rs2GameObject.interact(rcPortal.getId())) {
-                state = Gotr2State.LEAVING_ALTAR;
+                state = LEAVING_ALTAR;
                 return true;
             }
         }
+
+        if (timeout || (config.rune() != Combination.NONE && noBind)) {
+            if (!onBankRun()) {
+                sleepGaussian(1200, 150);
+                return true;
+            }
+        }
+
         resetPlugin();
-        if (state != Gotr2State.WAITING) {
-            state = Gotr2State.WAITING;
+        if (state != WAITING) {
+            state = WAITING;
             log("Make sure to start the script near the minigame barrier.");
             Rs2GameObject.interact(ObjectID.BARRIER_43849, "Peek");
         }
-        return state == Gotr2State.WAITING;
+        return state == WAITING;
     }
 
-    private static boolean enterMinigame() {
+
+    private boolean enterMinigame() {
+        if (timeout || (config.rune() != Combination.NONE && noBind)) {
+            if (!onBankRun()) {
+                sleepGaussian(1200, 150);
+                return false;
+            }
+        }
+
         if (Rs2GameObject.interact(ObjectID.BARRIER_43700, "quick-pass")) {
             Rs2Player.waitForWalking();
-            state = Gotr2State.ENTER_GAME;
-            shouldMineGuardianRemains = true;
+            state = ENTER_GAME;
+            Gotr2Script.shouldMineGuardianRemains = true;
             log("Entering game...");
             return true;
         }
         return false;
     }
 
-    private void checkPouches(boolean anyPouchUnknown, int mean, int stddev) {
-        if (anyPouchUnknown) {
-            Rs2Inventory.checkPouches();
-            sleep(Rs2Random.randomGaussian(mean, stddev));
-        }
-    }
+//    private void checkPouches(boolean anyPouchUnknown, int mean, int stddev) {
+//        if (anyPouchUnknown) {
+//            Rs2Inventory.checkPouches();
+//            sleep(Rs2Random.randomGaussian(mean, stddev));
+//        }
+//    }
 
     private boolean mineHugeGuardianRemain() {
         if (isInHugeMine()) {
@@ -560,13 +692,18 @@ public class Gotr2Script extends Script {
     }
 
     private void mineGuardianRemains() {
+        if (((getGuardiansPower() == 100) || (getGuardiansPower() == 0)) && ((timeout || (config.rune() != Combination.NONE && noBind)))) {
+            if (!onBankRun()) {
+                sleepGaussian(1200, 150);
+            }
+        }
         if (Microbot.getClient().hasHintArrow())
             return;
         if (Rs2Inventory.isFull()) {
             shouldMineGuardianRemains = false;
             return;
         }
-        state = Gotr2State.MINE_LARGE_GUARDIAN_REMAINS;
+        state = MINE_LARGE_GUARDIAN_REMAINS;
         if (isInHugeMine()) {
             leaveHugeMine();
             return;
@@ -592,15 +729,14 @@ public class Gotr2Script extends Script {
                     if (Rs2Equipment.isWearing("dragon pickaxe")) {
                         Rs2Combat.setSpecState(true, 1000);
                     }
-                    checkPouches(Rs2Random.between(1, 20) == 2, Rs2Random.between(100, 600), Rs2Random.between(100, 300));
-
                     repairPouches();
                     Rs2GameObject.interact(ObjectID.LARGE_GUARDIAN_REMAINS);
                     sleepGaussian(1200, 150);
                 }
             }
         } else {
-            if (!Rs2Player.isAnimating() && getStartTimer() != -1) {
+            //guardian parts
+            if ((!Rs2Player.getSkillRequirement(Skill.AGILITY, 56)) && !Rs2Player.isAnimating() && getStartTimer() != -1 && !Rs2Inventory.hasItem(GUARDIAN_ESSENCE)) {
                 if(isInLargeMine()) {
                     leaveLargeMine();
                 }
@@ -610,6 +746,9 @@ public class Gotr2Script extends Script {
                 repairPouches();
                 Rs2GameObject.interact(ObjectID.GUARDIAN_PARTS_43716);
                 sleepGaussian(1200, 150);
+                // we can assume that if the player is mining within the startTimer range, he will get enough guardian remains for the game
+                shouldMineGuardianRemains = false;
+            } else {
                 shouldMineGuardianRemains = false;
             }
         }
@@ -621,45 +760,42 @@ public class Gotr2Script extends Script {
         Global.sleepUntil(() -> !isInHugeMine(), 5000);
     }
 
-    private boolean powerUpGreatGuardian() {
-        if (Rs2Inventory.hasItem("guardian stone") && !shouldMineGuardianRemains && !isInLargeMine() && !isInHugeMine()) {
-            state = Gotr2State.POWERING_UP;
-            Rs2Npc.interact("The great guardian", "power-up");
-            log("Powering up the great guardian...");
-            sleepUntil(Rs2Player::isAnimating);
-            sleep(Rs2Random.randomGaussian(Rs2Random.between(1000, 2000), Rs2Random.between(100, 300)));
+    private static boolean repairPouches() {
+        if (!useNpcContact) {
+            repairWithCordelia();
             return true;
+        }
+        if (Rs2Inventory.hasDegradedPouch()) {
+            return Rs2Magic.repairPouchesWithLunar();
         }
         return false;
     }
 
-    private boolean repairCells() {
-        Rs2ItemModel cell = Rs2Inventory.get(CellType.PoweredCellList().toArray(Integer[]::new));
-        if (cell != null && isInMainRegion() && isInMiniGame() && !shouldMineGuardianRemains && !isInLargeMine() && !isInHugeMine()) {
-            int cellTier = CellType.GetCellTier(cell.getId());
-            List<Integer> shieldCellIds = Rs2GameObject.getObjectIdsByName("cell_tile");
-            if (Rs2Inventory.hasItemAmount(GUARDIAN_ESSENCE, 10)) {
-                for (int shieldCellId : shieldCellIds) {
-                    TileObject shieldCell = Rs2GameObject.getTileObject(shieldCellId);
-                    if (shieldCell == null) continue;
-                    if (CellType.GetShieldTier(shieldCell.getId()) < cellTier) {
-                        Microbot.log("Upgrading power cell at " + shieldCell.getWorldLocation());
-                        Rs2GameObject.interact(shieldCell, "Place-cell");
-                        sleepUntil(() -> !Rs2Player.isMoving());
-                        return true;
-                    }
-                }
-            }
-            shieldCellIds = shieldCellIds.stream().filter(id -> id != ObjectID.CELL_TILE_BROKEN).collect(Collectors.toList());
-            int interactedObjectId = Rs2GameObject.interact(shieldCellIds);
-            if (interactedObjectId != -1) {
-                log("Using cell with id " + interactedObjectId);
-                sleep(Rs2Random.randomGaussian(1000, 300));
-                sleepUntil(() -> !Rs2Player.isMoving());
-            }
-            return true;
-        }
-        return false;
+    /**
+     * Repair pouch by talking to cordelia
+     * make sure to have the repair unlocked for 25 pearls
+     */
+    private static void repairWithCordelia() {
+        if (!Rs2Inventory.hasDegradedPouch()) return;
+        if (!Rs2Inventory.hasItem(ItemID.ABYSSAL_PEARLS)) return;
+        Rs2NpcModel pouchRepairNpc = Rs2Npc.getNpc(NpcID.APPRENTICE_CORDELIA_12180);
+        if (pouchRepairNpc == null) return;
+        if (!Rs2Npc.hasAction(pouchRepairNpc.getId(), "Repair")) return;
+        if (!Rs2Npc.canWalkTo(pouchRepairNpc, 10)) return;
+        if (!Rs2Npc.interact(pouchRepairNpc, "Repair")) return;
+
+        log("Repairing pouches...");
+
+        Global.sleepUntil(() -> {
+            Rs2Dialogue.clickContinue();
+            return !Rs2Inventory.hasDegradedPouch();
+        }, 10000);
+    }
+
+    @Override
+    public void shutdown() {
+        state = null;
+        super.shutdown();
     }
 
     public boolean isOutsideBarrier() {
@@ -668,16 +804,20 @@ public class Gotr2Script extends Script {
                 && Rs2Player.getWorldLocation().getRegionID() == 14484;
     }
 
-    public boolean isInLargeMine() {
+    public  boolean isInLargeMine() {
         int largeMineX = 3637;
         return Rs2Player.getWorldLocation().getRegionID() == 14484
                 && Microbot.getClient().getLocalPlayer().getWorldLocation().getX() >= largeMineX;
     }
 
-    public boolean isInHugeMine() {
+    public  boolean isInHugeMine() {
         int hugeMineX = 3594;
         return Rs2Player.getWorldLocation().getRegionID() == 14484
                 && Microbot.getClient().getLocalPlayer().getWorldLocation().getX() <= hugeMineX;
+    }
+
+    public static boolean isGuardianPortal(GameObject gameObject) {
+        return guardianPortalInfo.containsKey(gameObject.getId());
     }
 
     public ItemManager getItemManager() {
@@ -699,10 +839,15 @@ public class Gotr2Script extends Script {
         if (timerWidget != null) {
             String timer = timerWidget.getText();
             if (timer == null) return -1;
+            // Split the timer string into minutes and seconds
             String[] timeParts = timer.split(":");
+
+            // Ensure there are two parts (minutes and seconds)
             if (timeParts.length == 2) {
                 int minutes = Integer.parseInt(timeParts[0]);
                 int seconds = Integer.parseInt(timeParts[1]);
+
+                // Convert the timer to total seconds
                 int totalSeconds = (minutes * 60) + seconds;
                 return totalSeconds;
             }
@@ -716,23 +861,23 @@ public class Gotr2Script extends Script {
         }
         int firstPortalTimeAdjustment = isFirstPortal ? 40 : 0;
         return timeSincePortal.map(instant -> (int) ChronoUnit.SECONDS.between(instant, Instant.now())-firstPortalTimeAdjustment).orElse(-1);
-
     }
 
     public static List<GameObject> getAvailableAltars() {
         int elementalPoints = Microbot.getVarbitValue(13686);
         int catalyticPoints = Microbot.getVarbitValue(13685);
-        if (config.Mode() == Mode.BALANCED) {
-            Microbot.log(elementalPoints < catalyticPoints ? "We have " + elementalPoints + " elemental points, looking for elemental altar..." : "We have " + catalyticPoints +" catalytic points, looking for catalytic altar...");
+        if (config.Mode().equals(Mode.BALANCED)) {
+            log(elementalPoints < catalyticPoints ? "We have " + elementalPoints + " elemental points, looking for elemental altar..." : "We have " + catalyticPoints +" catalytic points, looking for catalytic altar...");
         }
         return Rs2GameObject.getGameObjects().stream()
                 .filter(x -> {
 
                     if (!guardianPortalInfo.containsKey(x.getId())) return false;
-                    if (guardianPortalInfo.get(x.getId()).getRequiredLevel() > Microbot.getClient().getBoostedSkillLevel(Skill.RUNECRAFT)) {
+                    if (Gotr2Script.guardianPortalInfo.get(x.getId()).getRequiredLevel()
+                            > Microbot.getClient().getBoostedSkillLevel(Skill.RUNECRAFT)) {
                         return false;
                     }
-                    if (guardianPortalInfo.get(x.getId()).getQuestState() != QuestState.FINISHED) {
+                    if (Gotr2Script.guardianPortalInfo.get(x.getId()).getQuestState() != QuestState.FINISHED) {
                         return false;
                     }
 
@@ -761,12 +906,19 @@ public class Gotr2Script extends Script {
         return matcher.find() ? Integer.parseInt(matcher.group(1)) : 0;
     }
 
-    public static TileObject findRcAltar() {
-        Integer[] altarIds = new Integer[] {ObjectID.ALTAR_34760, ObjectID.ALTAR_34761, ObjectID.ALTAR_34762, ObjectID.ALTAR_34763, ObjectID.ALTAR_34764,
-                ObjectID.ALTAR_34765, ObjectID.ALTAR_34766, ObjectID.ALTAR_34767, ObjectID.ALTAR_34768, ObjectID.ALTAR_34769, ObjectID.ALTAR_34770,
-                ObjectID.ALTAR_34771, ObjectID.ALTAR_34772, ObjectID.ALTAR_43479};
-        return Rs2GameObject.findObject(altarIds);
+    public static void resetPlugin() {
+        guardians.clear();
+        activeGuardianPortals.clear();
+        greatGuardian = null;
+        Microbot.getClient().clearHintArrow();
     }
+
+//    public static TileObject findRcAltar() {
+//        Integer[] altarIds = new Integer[] {ObjectID.ALTAR_34760, ObjectID.ALTAR_34761, ObjectID.ALTAR_34762, ObjectID.ALTAR_34763, ObjectID.ALTAR_34764,
+//                ObjectID.ALTAR_34765, ObjectID.ALTAR_34766, ObjectID.ALTAR_34767, ObjectID.ALTAR_34768, ObjectID.ALTAR_34769, ObjectID.ALTAR_34770,
+//                ObjectID.ALTAR_34771, ObjectID.ALTAR_34772, ObjectID.ALTAR_43479};
+//        return Rs2GameObject.findObject(altarIds);
+//    }
 
     public static TileObject findPortalToLeaveAltar() {
         Integer[] altarIds = new Integer[] {ObjectID.PORTAL_34748, ObjectID.PORTAL_34749, ObjectID.PORTAL_34750, ObjectID.PORTAL_34751, ObjectID.PORTAL_34752,
@@ -775,80 +927,172 @@ public class Gotr2Script extends Script {
         return Rs2GameObject.findObject(altarIds);
     }
 
-    private boolean waitingForGameToStart(int timeToStart) {
-        if (isInHugeMine()) return false;
+    public boolean isBreakHandlerEnabled()
+    {
+        return Microbot.isPluginEnabled(BreakHandlerPlugin.class);
+    }
 
-        if (getStartTimer() > Rs2Random.randomGaussian(35, Rs2Random.between(1, 5)) || getStartTimer() == -1 || timeToStart > 10) {
+    public boolean onBankRun() {
+        System.out.println("switching to BANKING state.");
+        state = BANKING;
 
-            // Only take cells if we don't already have them
-            if (!Rs2Inventory.hasItem("Uncharged cell")) {
-                // If in large mine and need cells, leave first
-                if (isInLargeMine()) {
-                    if (leaveLargeMine()) return true;
+        if (!isInMainRegion()) {
+            TileObject rcPortal = findPortalToLeaveAltar();
+            if (rcPortal != null && Rs2GameObject.interact(rcPortal.getId())) {
+                state = LEAVING_ALTAR;
+                return false;
+            }
+        }
+
+        if (isInHugeMine()) {
+            leaveHugeMine();
+            return false;
+        }
+
+        if (isInLargeMine()) {
+            leaveLargeMine();
+            return false;
+        }
+
+        if (!isOutsideBarrier()) {
+            if (Rs2GameObject.interact(ObjectID.BARRIER_43700, "quick-pass")) {
+                Rs2Player.waitForWalking();
+                return false;
+            }
+        }
+
+        if (config.rune() == Combination.NONE) {
+            if (timeout) {
+                Rs2Bank.walkToBank();
+                Rs2Player.waitForWalking();
+                timeout = false;
+                BreakHandlerScript.setLockState(false);
+                BreakHandlerScript.breakIn = 0;
+                sleepGaussian(1200, 150);
+            }
+            return true;
+        }
+
+        if (Rs2Equipment.isWearing(ItemID.BINDING_NECKLACE)) {
+            noBind = false;
+            if (timeout) {
+                timeout = false;
+                BreakHandlerScript.setLockState(false);
+                BreakHandlerScript.breakIn = 0;
+                sleepGaussian(1200, 150);
+            }
+            return true;
+        }
+
+        if (Rs2Inventory.hasItemAmount(ItemID.BINDING_NECKLACE, 1)) {
+            Rs2Inventory.wear(ItemID.BINDING_NECKLACE);
+            sleepUntil(() -> Rs2Equipment.isWearing(ItemID.BINDING_NECKLACE), 2000);
+            return false;
+        }
+
+        if (isOutsideBarrier()) {
+            Rs2Bank.walkToBank();
+            Rs2Player.waitForWalking();
+            Rs2Bank.openBank();
+            sleepUntil(Rs2Bank::isOpen);
+            if (Rs2Bank.hasBankItem(ItemID.BINDING_NECKLACE, 2)) {
+                Rs2Bank.withdrawX(true, ItemID.BINDING_NECKLACE, 2);
+                Rs2Inventory.waitForInventoryChanges(1200);
+                Rs2Bank.closeBank();
+            } else {
+                configManager.setConfiguration(config.configGroup, "combination", Combination.NONE);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Nullable
+    public Integer finalRune(Combination combo) {
+        switch (combo) {
+            case MIST: // needs AIR + WATER
+                if (waterAltar && air && Rs2Inventory.hasItem(ItemID.AIR_RUNE)) {
+                    return ItemID.AIR_RUNE;
                 }
-                takeUnchargedCells();
-                // Return to large mine if we were there before
-                if (!isInLargeMine() && shouldMineGuardianRemains) {
-                    if (Rs2Walker.walkTo(new WorldPoint(3632, 9503, 0), 20)) {
-                        Rs2GameObject.interact(ObjectID.RUBBLE_43724);
-                        return true;
+                if (airAltar && water && Rs2Inventory.hasItem(ItemID.WATER_RUNE)) {
+                    return ItemID.WATER_RUNE;
+                }
+                break;
+            case MUD: // WATER + EARTH
+                if (waterAltar && earth && Rs2Inventory.hasItem(ItemID.EARTH_RUNE)) {
+                    return ItemID.EARTH_RUNE;
+                }
+                if (earthAltar && water && Rs2Inventory.hasItem(ItemID.WATER_RUNE)) {
+                    return ItemID.WATER_RUNE;
+                }
+                break;
+            case DUST: // EARTH + AIR
+                if (earthAltar && air && Rs2Inventory.hasItem(ItemID.AIR_RUNE)) {
+                    return ItemID.AIR_RUNE;
+                }
+                if (airAltar && earth && Rs2Inventory.hasItem(ItemID.EARTH_RUNE)) {
+                    return ItemID.EARTH_RUNE;
+                }
+                break;
+            case LAVA: // EARTH + FIRE
+                if (fireAltar && earth && Rs2Inventory.hasItem(ItemID.EARTH_RUNE)) {
+                    return ItemID.EARTH_RUNE;
+                }
+                if (earthAltar && fire && Rs2Inventory.hasItem(ItemID.FIRE_RUNE)) {
+                    return ItemID.FIRE_RUNE;
+                }
+                break;
+            case STEAM: // WATER + FIRE
+                if (waterAltar && fire && Rs2Inventory.hasItem(ItemID.FIRE_RUNE)) {
+                    return ItemID.FIRE_RUNE;
+                }
+                if (fireAltar && water && Rs2Inventory.hasItem(ItemID.WATER_RUNE)) {
+                    return ItemID.WATER_RUNE;
+                }
+                break;
+            case SMOKE: // FIRE + AIR
+                if (fireAltar && air && Rs2Inventory.hasItem(ItemID.AIR_RUNE)) {
+                    return ItemID.AIR_RUNE;
+                }
+                if (airAltar && fire && Rs2Inventory.hasItem(ItemID.FIRE_RUNE)) {
+                    return ItemID.FIRE_RUNE;
+                }
+                break;
+            case ALL:
+                // Use rune enums to collect valid candidates based on current altar
+                List<Integer> candidates = new ArrayList<>();
+
+                Elemental altarRune = null;
+                if (airAltar) {
+                    altarRune = Elemental.AIR;
+                } else if (waterAltar) {
+                    altarRune = Elemental.WATER;
+                } else if (earthAltar) {
+                    altarRune = Elemental.EARTH;
+                } else if (fireAltar) {
+                    altarRune = Elemental.FIRE;
+                }
+
+                if (altarRune != null) {
+                    for (Elemental rune : Elemental.values()) {
+                        if (rune == altarRune) {
+                            continue; // can't combine with itself
+                        }
+                        if (Rs2Inventory.hasItem(rune.getItemId())) {
+                            candidates.add(rune.getItemId());
+                        }
                     }
                 }
-            }
 
-            repairPouches();
+                if (candidates.isEmpty()) {
+                    return null;
+                }
 
-            if (!shouldMineGuardianRemains) return true;
-
-            mineGuardianRemains();
-            return true;
+                int idx = ThreadLocalRandom.current().nextInt(candidates.size());
+                return candidates.get(idx);
+            default:
+                return null;
         }
-        return false;
-    }
-
-    public static void resetPlugin() {
-        guardians.clear();
-        activeGuardianPortals.clear();
-        greatGuardian = null;
-        Microbot.getClient().clearHintArrow();
-    }
-
-    private static boolean repairPouches() {
-        if (!useNpcContact) {
-            repairWithCordelia();
-            return true;
-        }
-        if (Rs2Inventory.hasDegradedPouch()) {
-            return Rs2Magic.repairPouchesWithLunar();
-        }
-        return false;
-    }
-
-    private static void repairWithCordelia() {
-        if (!Rs2Inventory.hasDegradedPouch()) return;
-        if (!Rs2Inventory.hasItem(ItemID.ABYSSAL_PEARLS)) return;
-        Rs2NpcModel pouchRepairNpc = Rs2Npc.getNpc(NpcID.APPRENTICE_CORDELIA_12180);
-        if (pouchRepairNpc == null) return;
-        if (!Rs2Npc.hasAction(pouchRepairNpc.getId(), "Repair")) return;
-        if (!Rs2Npc.canWalkTo(pouchRepairNpc, 10)) return;
-        if (!Rs2Npc.interact(pouchRepairNpc, "Repair")) return;
-
-        Microbot.log("Repairing pouches...");
-
-        Global.sleepUntil(() -> {
-            Rs2Dialogue.clickContinue();
-            return !Rs2Inventory.hasDegradedPouch();
-        }, 10000);
-
-    }
-
-    public static boolean isGuardianPortal(GameObject gameObject) {
-        return guardianPortalInfo.containsKey(gameObject.getId());
-    }
-
-    @Override
-    public void shutdown() {
-        state = Gotr2State.SHUTDOWN;
-        super.shutdown();
+        return null;
     }
 }

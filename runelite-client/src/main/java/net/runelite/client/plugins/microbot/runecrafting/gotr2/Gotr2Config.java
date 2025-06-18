@@ -19,7 +19,7 @@ public interface Gotr2Config extends Config {
     String maxAmountEssence = "maxAmountEssence";
     String shouldDepositRunes = "shouldDepositRunes";
     String combination = "combination";
-    // debug flags were moved to Gotr2Script
+    // debug flags were moved to GotrScript
 
     @ConfigSection(
             name = "General",

@@ -1,7 +1,6 @@
 package net.runelite.client.plugins.microbot.runecrafting.gotr2.data;
 
 import lombok.Getter;
-import net.runelite.api.ItemID;
 
 import java.util.Arrays;
 import java.util.Set;
@@ -49,4 +48,3 @@ public enum Combination {
         return Arrays.stream(values()).map(Combination::getId).collect(Collectors.toSet());
     }
 }
-

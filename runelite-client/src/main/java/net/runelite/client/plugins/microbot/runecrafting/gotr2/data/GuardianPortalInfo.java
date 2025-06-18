@@ -15,8 +15,8 @@ public class GuardianPortalInfo {
     private int talismanId;
     @Getter
     private int spriteId;
-    private RuneType runeType;
-    private CellType cellType;
+    private net.runelite.client.plugins.microbot.runecrafting.gotr2.data.RuneType runeType;
+    private net.runelite.client.plugins.microbot.runecrafting.gotr2.data.CellType cellType;
 
     @Getter
     private QuestState questState;

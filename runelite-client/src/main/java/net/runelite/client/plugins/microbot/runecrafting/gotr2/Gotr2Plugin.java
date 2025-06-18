@@ -1,7 +1,6 @@
 package net.runelite.client.plugins.microbot.runecrafting.gotr2;
 
 import com.google.inject.Provides;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.GameObject;
@@ -17,8 +16,8 @@ import net.runelite.client.plugins.microbot.qualityoflife.scripts.pouch.PouchOve
 import net.runelite.client.plugins.microbot.runecrafting.gotr2.Gotr2Config;
 import net.runelite.client.plugins.microbot.runecrafting.gotr2.Gotr2Overlay;
 import net.runelite.client.plugins.microbot.runecrafting.gotr2.Gotr2Script;
-import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.plugins.microbot.runecrafting.gotr2.Gotr2State;
+import net.runelite.client.ui.overlay.OverlayManager;
 
 import javax.inject.Inject;
 import java.awt.*;
@@ -26,23 +25,20 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.regex.Matcher;
 
-import static net.runelite.client.plugins.microbot.runecrafting.gotr2.Gotr2Script.optimizedEssenceLoop;
-
 @PluginDescriptor(
         name = PluginDescriptor.Mocrosoft + "GuardiansOfTheRift2",
-        description = "Guardians of the rift plugin",
-        tags = {"runecrafting", "guardians of the rift", "gotr2", "microbot"},
+        description = "Guardians of the rift 2 plugin",
+        tags = {"runecrafting", "guardians of the rift 2", "gotr2", "microbot"},
         enabledByDefault = false
 )
 @Slf4j
 public class Gotr2Plugin extends Plugin {
-    @Getter
     @Inject
-    private Gotr2Config config;
+    private net.runelite.client.plugins.microbot.runecrafting.gotr2.Gotr2Config config;
 
     @Provides
-    Gotr2Config provideConfig(ConfigManager configManager) {
-        return configManager.getConfig(Gotr2Config.class);
+    net.runelite.client.plugins.microbot.runecrafting.gotr2.Gotr2Config provideConfig(ConfigManager configManager) {
+        return configManager.getConfig(net.runelite.client.plugins.microbot.runecrafting.gotr2.Gotr2Config.class);
     }
 
     @Inject
@@ -54,6 +50,10 @@ public class Gotr2Plugin extends Plugin {
     @Inject
     Gotr2Script gotr2Script;
 
+    public Gotr2Config getConfig() {
+        return config;
+    }
+
 
     @Override
     protected void startUp() throws AWTException {
@@ -61,13 +61,11 @@ public class Gotr2Plugin extends Plugin {
             overlayManager.add(pouchOverlay);
             overlayManager.add(gotr2Overlay);
         }
-        Gotr2Script.state = Gotr2State.INITIALIZE;
         gotr2Script.run(config);
     }
 
     protected void shutDown() {
         gotr2Script.shutdown();
-        Gotr2Script.state = Gotr2State.SHUTDOWN;
         overlayManager.remove(gotr2Overlay);
     }
 
@@ -145,7 +143,6 @@ public class Gotr2Plugin extends Plugin {
         }
 
         if (gameObject.getId() == Gotr2Script.portalId) {
-            optimizedEssenceLoop = true;
             Microbot.getClient().setHintArrow(gameObject.getWorldLocation());
             if(Gotr2Script.isFirstPortal) {
                 Gotr2Script.isFirstPortal = false;
