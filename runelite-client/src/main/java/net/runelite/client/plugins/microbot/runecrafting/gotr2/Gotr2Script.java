@@ -453,8 +453,9 @@ public class Gotr2Script extends Script {
 
     private boolean isOutOfFragments() {
         if ((Rs2Inventory.hasItem(GUARDIAN_ESSENCE)) && (!Rs2Inventory.hasItem(GUARDIAN_FRAGMENTS))) {
-            craftRunes();
-            return false;
+            enterAltar();
+            shouldMineGuardianRemains = true;
+            return true;
         }
         if ((!Rs2Inventory.hasItem(GUARDIAN_FRAGMENTS) && !Rs2Inventory.isFull()) || (getTimeSincePortal() > 85 && !Rs2Inventory.hasItem(GUARDIAN_ESSENCE))) {
             shouldMineGuardianRemains = true;
