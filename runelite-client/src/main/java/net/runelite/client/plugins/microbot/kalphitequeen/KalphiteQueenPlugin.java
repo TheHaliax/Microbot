@@ -17,6 +17,7 @@ import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.util.Global;
 import net.runelite.client.plugins.microbot.util.coords.Rs2WorldPoint;
 import net.runelite.client.plugins.microbot.util.npc.Rs2NpcModel;
+import net.runelite.client.plugins.microbot.util.player.Rs2Player;
 
 import javax.inject.Inject;
 import java.awt.*;
@@ -53,16 +54,16 @@ public class KalphiteQueenPlugin extends Plugin {
     public static class NpcInfo {
         private final Rs2NpcModel model;
         private final int         distance;
-        private final Rs2WorldPoint  location;
+        private final WorldPoint  location;
 
-        public NpcInfo(Rs2NpcModel model, int distance, Rs2WorldPoint location) {
+        public NpcInfo(Rs2NpcModel model, int distance, WorldPoint location) {
             this.model    = model;
             this.distance = distance;
             this.location = location;
         }
         public Rs2NpcModel getModel()    { return model; }
         public int          getDistance() { return distance; }
-        public Rs2WorldPoint   getLocation() { return location; }
+        public WorldPoint   getLocation() { return location; }
     }
 
 
@@ -93,7 +94,7 @@ public class KalphiteQueenPlugin extends Plugin {
     @Subscribe
     public void onGameTick(GameTick tick)
     {
-        KalphiteQueenScript.currentPlayerLocation = getRs2WorldPoint();
+        KalphiteQueenScript.currentPlayerLocation = Rs2Player.getWorldLocation();
 
         var client = Microbot.getClient();
         var playerLp = client.getLocalPlayer().getLocalLocation();

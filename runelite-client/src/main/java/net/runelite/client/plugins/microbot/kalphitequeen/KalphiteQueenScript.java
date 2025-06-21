@@ -24,22 +24,22 @@ public class KalphiteQueenScript extends Script {
     static KalphiteQueenConfig config;
     public static boolean queenIsDead;
 
-    private static final Rs2WorldPoint WORKER_2                 = new Rs2WorldPoint(3508, 9493, 0);
-    private static final Rs2WorldPoint UNSTACK_WORKER_1         = new Rs2WorldPoint(3508, 9492, 0);
-    private static final Rs2WorldPoint KQ_2                     = new Rs2WorldPoint(3505, 9495, 0);
-    private static final Rs2WorldPoint UNSTACK_WORKER_2         = new Rs2WorldPoint(3504, 9496, 0);
-    private static final Rs2WorldPoint UNSTACK_KQ               = new Rs2WorldPoint(3503, 9493, 0);
-    private static final Rs2WorldPoint WORKER_1                 = new Rs2WorldPoint(3499, 9494, 0);
-    private static final Rs2WorldPoint KQ_1                     = new Rs2WorldPoint(3491, 9495, 0);
-    private static final Rs2WorldPoint KQ_3                     = new Rs2WorldPoint(3491, 9491, 0);
-    private static final Rs2WorldPoint KQ_SAFE_SPOT_1           = new Rs2WorldPoint(3490, 9496, 0);
-    private static final Rs2WorldPoint KQ_SAFE_SPOT_2           = new Rs2WorldPoint(3489, 9495, 0);
-    private static final Rs2WorldPoint KQ_SAFE_SPOT_3           = new Rs2WorldPoint(3491, 9497, 0);
-    private static final Rs2WorldPoint WORKER_SETUP_1           = new Rs2WorldPoint(3506, 9492, 0);
-    private static final Rs2WorldPoint WORKER_SETUP_2           = new Rs2WorldPoint(3502, 9491, 0);
-    private static final Rs2WorldPoint KALPHITE_SETUP_WORKER_1  = new Rs2WorldPoint(3499, 9495, 0);
-    private static final Rs2WorldPoint KALPHITE_SETUP_WORKER_2  = new Rs2WorldPoint(3495, 9495, 0);
-    private static final Rs2WorldPoint KALPHITE_SETUP_QUEEN     = new Rs2WorldPoint(3490, 9495, 0);
+    private static final WorldPoint WORKER_2                 = new WorldPoint(3508, 9493, 0);
+    private static final WorldPoint UNSTACK_WORKER_1         = new WorldPoint(3508, 9492, 0);
+    private static final WorldPoint KQ_2                     = new WorldPoint(3505, 9495, 0);
+    private static final WorldPoint UNSTACK_WORKER_2         = new WorldPoint(3504, 9496, 0);
+    private static final WorldPoint UNSTACK_KQ               = new WorldPoint(3503, 9493, 0);
+    private static final WorldPoint WORKER_1                 = new WorldPoint(3499, 9494, 0);
+    private static final WorldPoint KQ_1                     = new WorldPoint(3491, 9495, 0);
+    private static final WorldPoint KQ_3                     = new WorldPoint(3491, 9491, 0);
+    private static final WorldPoint KQ_SAFE_SPOT_1           = new WorldPoint(3490, 9496, 0);
+    private static final WorldPoint KQ_SAFE_SPOT_2           = new WorldPoint(3489, 9495, 0);
+    private static final WorldPoint KQ_SAFE_SPOT_3           = new WorldPoint(3491, 9497, 0);
+    private static final WorldPoint WORKER_SETUP_1           = new WorldPoint(3506, 9492, 0);
+    private static final WorldPoint WORKER_SETUP_2           = new WorldPoint(3502, 9491, 0);
+    private static final WorldPoint KALPHITE_SETUP_WORKER_1  = new WorldPoint(3499, 9495, 0);
+    private static final WorldPoint KALPHITE_SETUP_WORKER_2  = new WorldPoint(3495, 9495, 0);
+    private static final WorldPoint KALPHITE_SETUP_QUEEN     = new WorldPoint(3490, 9495, 0);
     private static final int    NPC_KG = 962, NPC_KQ = 963;
 
     boolean initCheck = false;
@@ -47,11 +47,11 @@ public class KalphiteQueenScript extends Script {
     boolean queenSetup = false;
     boolean queenFlinched = false;
 
-    public static Rs2WorldPoint currentPlayerLocation;
+    public static WorldPoint currentPlayerLocation;
     public static int          queenDistance;
-    public static Rs2WorldPoint  queenLocation;
+    public static WorldPoint  queenLocation;
     public static List<Integer>     guardianDistances = new ArrayList<>(2);
-    public static List<Rs2WorldPoint>  guardianLocations = new ArrayList<>(2);
+    public static List<WorldPoint>  guardianLocations = new ArrayList<>(2);
     public static final List<Rs2NpcModel> kalphiteGuardians = new ArrayList<>(2);
 
 
@@ -64,7 +64,7 @@ public class KalphiteQueenScript extends Script {
                 long startTime = System.currentTimeMillis();
 
                 if (!initCheck) {
-                    if (Objects.equals(currentPlayerLocation, WORKER_2)) {
+                    if (!playerOn(WORKER_2)) {
                         shutdown();
                     }
                     initCheck = true;
@@ -110,6 +110,28 @@ public class KalphiteQueenScript extends Script {
         }
 
         return true;
+    }
+
+    private boolean playerOn(WorldPoint target) {
+        return currentPlayerLocation != null
+                && currentPlayerLocation.equals(target);
+    }
+
+    private boolean anyGuardianOn(WorldPoint target) {
+        return guardianLocations.stream()
+                .anyMatch(loc -> loc.equals(target));
+    }
+
+    private boolean guardianOn(int index, WorldPoint target) {
+        var locs = guardianLocations;
+        return index >= 0
+                && index < locs.size()
+                && locs.get(index).equals(target);
+    }
+
+    private boolean queenOn(WorldPoint target) {
+        return queenLocation != null
+                && queenLocation.equals(target);
     }
 
     @Override
