@@ -2,6 +2,9 @@ package net.runelite.client.plugins.microbot.kalphitequeen;
 
 import com.google.inject.Provides;
 import net.runelite.api.NPC;
+import net.runelite.api.NPCComposition;
+import net.runelite.api.Perspective;
+import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameTick;
@@ -23,6 +26,7 @@ import javax.inject.Inject;
 import java.awt.*;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -31,7 +35,7 @@ import static net.runelite.client.plugins.microbot.util.npc.Rs2Npc.getNpcs;
 import static net.runelite.client.plugins.microbot.util.player.Rs2Player.getRs2WorldPoint;
 
 @PluginDescriptor(
-        name = PluginDescriptor.Hal + "KalphiteQueen",
+        name = PluginDescriptor.Hal + " KalphiteQueen",
         description = "Kalphite Queen Safespot and Flinch",
         tags = {"KQ", "Hal", "Kalphite", "Queen", "Diary", "Desert"},
         enabledByDefault = false
@@ -70,6 +74,8 @@ public class KalphiteQueenPlugin extends Plugin {
     @Override
     protected void startUp() throws AWTException {
         kalphiteQueenScript.run(config);
+        KalphiteQueenScript.workersSetup = false;
+        KalphiteQueenScript.queenSetup = false;
     }
 
     @Override
@@ -92,62 +98,107 @@ public class KalphiteQueenPlugin extends Plugin {
     }
 
     @Subscribe
-    public void onGameTick(GameTick tick)
-    {
-        KalphiteQueenScript.currentPlayerLocation = Rs2Player.getWorldLocation();
-
+    public void onGameTick(GameTick tick) {
         var client = Microbot.getClient();
-        var playerLp = client.getLocalPlayer().getLocalLocation();
+        var localPlayer = client.getLocalPlayer();
+        LocalPoint playerLp = localPlayer.getLocalLocation();
+        WorldPoint playerWp = playerLp == null
+                ? null
+                : WorldPoint.fromLocalInstance(client, playerLp);
+        KalphiteQueenScript.currentPlayerLocation = playerWp;
 
-        // 1. Track the single Kalphite Queen
+        // 1. Kalphite Queen
         kalphiteQueen = getNpcs(n -> "Kalphite Queen".equals(n.getName()))
-                .findFirst()
-                .orElse(null);
-
-        if (kalphiteQueen != null)
-        {
-            KalphiteQueenScript.queenDistance = kalphiteQueen
-                    .getLocalLocation()
-                    .distanceTo(playerLp);
-            KalphiteQueenScript.queenLocation = kalphiteQueen.getWorldLocation();
-            Microbot.log("Queen → dist=%d, at=%s", KalphiteQueenScript.queenDistance, KalphiteQueenScript.queenLocation);
-        }
-        else
-        {
-            KalphiteQueenScript.queenDistance = -1;
+                .findFirst().orElse(null);
+        if (kalphiteQueen != null && playerLp != null) {
+            LocalPoint qLp = kalphiteQueen.getLocalLocation();
+            NPCComposition comp = kalphiteQueen.getComposition();
+            int size = comp != null ? comp.getSize() : 1;
+            if (qLp != null) {
+                // SW corner local offset:
+                LocalPoint swLp = qLp.plus(
+                        -((size - 1) * Perspective.LOCAL_TILE_SIZE / 2),
+                        -((size - 1) * Perspective.LOCAL_TILE_SIZE / 2)
+                );
+                WorldPoint swWp = WorldPoint.fromLocalInstance(client, swLp);
+                KalphiteQueenScript.queenLocation = swWp;
+                if (playerWp != null) {
+                    int dist = swWp.distanceTo(playerWp);
+                    KalphiteQueenScript.queenDistance = dist;
+                    Microbot.log("Queen → dist=%d, SW at=%s", dist, swWp);
+                }
+            }
+            KalphiteQueenScript.queenInteracting = kalphiteQueen.isInteracting()
+                    && Objects.equals(kalphiteQueen.getInteracting(), localPlayer);
+        } else {
             KalphiteQueenScript.queenLocation = null;
+            KalphiteQueenScript.queenDistance = -1;
+            KalphiteQueenScript.queenInteracting = false;
         }
 
-        // 2. Track up to two Kalphite Guardians
+        // 2. Guardians
         List<Rs2NpcModel> found = getNpcs(n -> "Kalphite Guardian".equals(n.getName()))
-                .limit(2)
-                .collect(Collectors.toList());
-
-        // refresh your lists
+                .limit(2).collect(Collectors.toList());
         KalphiteQueenScript.kalphiteGuardians.clear();
         KalphiteQueenScript.kalphiteGuardians.addAll(found);
         KalphiteQueenScript.guardianDistances.clear();
         KalphiteQueenScript.guardianLocations.clear();
+        KalphiteQueenScript.guardian0Interacting = false;
+        KalphiteQueenScript.guardian1Interacting = false;
 
-        for (Rs2NpcModel g : KalphiteQueenScript.kalphiteGuardians)
+        for (int i = 0; i < found.size(); i++) {
+            Rs2NpcModel g = found.get(i);
+            LocalPoint gLp = g.getLocalLocation();
+            NPCComposition comp = g.getComposition();
+            int size = comp != null ? comp.getSize() : 1;
+            if (gLp != null) {
+                LocalPoint swLp = gLp.plus(
+                        -((size - 1) * Perspective.LOCAL_TILE_SIZE / 2),
+                        -((size - 1) * Perspective.LOCAL_TILE_SIZE / 2)
+                );
+                WorldPoint swWp = WorldPoint.fromLocalInstance(client, swLp);
+                KalphiteQueenScript.guardianLocations.add(swWp);
+                if (playerWp != null) {
+                    int dist = swWp.distanceTo(playerWp);
+                    KalphiteQueenScript.guardianDistances.add(dist);
+                } else {
+                    KalphiteQueenScript.guardianDistances.add(-1);
+                }
+            } else {
+                KalphiteQueenScript.guardianLocations.add(null);
+                KalphiteQueenScript.guardianDistances.add(-1);
+            }
+            boolean interacting = g.isInteracting()
+                    && Objects.equals(g.getInteracting(), localPlayer);
+            if (i == 0) KalphiteQueenScript.guardian0Interacting = interacting;
+            if (i == 1) KalphiteQueenScript.guardian1Interacting = interacting;
+        }
+
+        boolean hasCalculatedAttackSpeed = false;
+        if (!hasCalculatedAttackSpeed)
         {
-            int d = g.getLocalLocation().distanceTo(playerLp);
-            KalphiteQueenScript.guardianDistances.add(d);
-            KalphiteQueenScript.guardianLocations.add(g.getWorldLocation());
-            Microbot.log("Guardian → dist=%d, at=%s", d, g.getWorldLocation());
+            // We rely on the static timestamps your Hitsplat listener already sets:
+            //   KalphiteQueenPlugin.lastMyHitTime  = time of most recent hitsplat
+            //   KalphiteQueenPlugin.prevMyHitTime  = time of the hit before that
+            // (Assuming you have those; if not, add them exactly as longs updated in your listener.)
+
+            long firstHitTime = -1;
+            long lastHitTime = -1;
+            if (firstHitTime < 0 && lastHitTime > 0)
+            {
+                // Capture the first hit timestamp
+                firstHitTime = lastHitTime;
+            }
+            else if (firstHitTime > 0 && lastHitTime > firstHitTime)
+            {
+                // Second hit: compute interval
+                KalphiteQueenScript.attackSpeed = (int)(lastHitTime - firstHitTime);
+                Microbot.log("Attack speed: %d ms", KalphiteQueenScript.attackSpeed);
+                hasCalculatedAttackSpeed = true;
+            }
         }
     }
 
-    public static Stream<NpcInfo> getNpcInfos(Predicate<Rs2NpcModel> predicate) {
-        var client   = Microbot.getClient();
-        var playerLp = client.getLocalPlayer().getLocalLocation();
-        return getNpcs(predicate)
-                .map(n -> new NpcInfo(
-                        n,
-                        n.getLocalLocation().distanceTo(playerLp),
-                        n.getWorldLocation()
-                ));
-    }
 
 //    @Subscribe
 //    public void onNpcDespawned(NpcDespawned npcDespawned) {
