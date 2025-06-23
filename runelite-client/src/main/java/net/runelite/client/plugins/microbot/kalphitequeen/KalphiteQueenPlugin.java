@@ -76,6 +76,9 @@ public class KalphiteQueenPlugin extends Plugin {
         kalphiteQueenScript.run(config);
         KalphiteQueenScript.workersSetup = false;
         KalphiteQueenScript.queenSetup = false;
+        KalphiteQueenScript.queenInteracting = false;
+        KalphiteQueenScript.initCheck = false;
+        KalphiteQueenScript.inventoryFood = -1;
     }
 
     @Override
@@ -89,11 +92,10 @@ public class KalphiteQueenPlugin extends Plugin {
         String msg = chatMessage.getMessage();
 
         if (msg.contains("Seems to be burnt out.")) {
-
+            KalphiteQueenScript.queenLairEmpty = true;
         }
-
         if (msg.contains("Someone has passed here recently.")) {
-
+            KalphiteQueenScript.queenLairEmpty = false;
         }
     }
 
@@ -125,7 +127,6 @@ public class KalphiteQueenPlugin extends Plugin {
                 if (playerWp != null) {
                     int dist = swWp.distanceTo(playerWp);
                     KalphiteQueenScript.queenDistance = dist;
-                    Microbot.log("Queen → dist=%d, SW at=%s", dist, swWp);
                 }
             }
             KalphiteQueenScript.queenInteracting = kalphiteQueen.isInteracting()
@@ -198,21 +199,4 @@ public class KalphiteQueenPlugin extends Plugin {
             }
         }
     }
-
-
-//    @Subscribe
-//    public void onNpcDespawned(NpcDespawned npcDespawned) {
-//        NPC npc = npcDespawned.getNpc();
-//        if (npc.getId() == 963) {
-//            KalphiteQueenScript.queenIsDead = true;
-//        }
-//    }
-//
-//    @Subscribe
-//    public void onNpcSpawned(NpcSpawned npcSpawned) {
-//        NPC npc = npcSpawned.getNpc();
-//        if (npc.getId() == 963) {
-//            KalphiteQueenScript.queenIsDead = false;
-//        }
-//    }
 }
