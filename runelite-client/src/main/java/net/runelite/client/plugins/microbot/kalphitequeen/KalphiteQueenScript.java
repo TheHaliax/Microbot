@@ -1,27 +1,21 @@
 package net.runelite.client.plugins.microbot.kalphitequeen;
 
 import net.runelite.api.EquipmentInventorySlot;
-import net.runelite.api.ObjectComposition;
-import net.runelite.api.ObjectID;
 import net.runelite.api.Skill;
 import net.runelite.api.coords.WorldArea;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
-import net.runelite.client.plugins.microbot.globval.enums.InterfaceTab;
+import net.runelite.client.plugins.microbot.kalphitequeen.data.SpecWeapon;
 import net.runelite.client.plugins.microbot.util.combat.Rs2Combat;
 import net.runelite.client.plugins.microbot.util.equipment.Rs2Equipment;
 import net.runelite.client.plugins.microbot.util.gameobject.Rs2GameObject;
 import net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory;
-import net.runelite.client.plugins.microbot.util.inventory.Rs2ItemModel;
-import net.runelite.client.plugins.microbot.util.misc.Rs2Food;
 import net.runelite.client.plugins.microbot.util.npc.Rs2Npc;
 import net.runelite.client.plugins.microbot.util.npc.Rs2NpcModel;
 import net.runelite.client.plugins.microbot.util.player.Rs2Player;
-import net.runelite.client.plugins.microbot.util.reflection.Rs2Reflection;
 import net.runelite.client.plugins.microbot.util.security.Login;
-import net.runelite.client.plugins.microbot.util.tabs.Rs2Tab;
 import net.runelite.client.plugins.microbot.util.walker.Rs2Walker;
 import net.runelite.client.plugins.microbot.util.widget.Rs2Widget;
 
@@ -30,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
-import static net.runelite.client.plugins.microbot.runecrafting.gotr.GotrScript.totalTime;
+import static net.runelite.client.plugins.microbot.kalphitequeen.KalphiteQueenLootScript.lootExists;
 import static net.runelite.client.plugins.microbot.util.npc.Rs2Npc.interact;
 import static net.runelite.client.plugins.microbot.util.npc.Rs2Npc.isInAttackRange;
 import static net.runelite.client.plugins.microbot.util.prayer.Rs2Prayer.getBestMeleePrayer;
@@ -43,6 +37,7 @@ public class KalphiteQueenScript extends Script {
     public static String version = "0.0.1";
     public static boolean queenLairEmpty;
     static KalphiteQueenConfig config;
+    public static long totalTime = 0;
 
 
     private static final WorldPoint WORKER_2                 = new WorldPoint(3508, 9493, 0);
@@ -84,10 +79,8 @@ public class KalphiteQueenScript extends Script {
 
     static boolean workersSetup = false;
     static boolean queenSetup = false;
-    static int attackSpeed = -1;
-    static boolean guardianAttack;
+    static boolean queenLured = false;
     public static int inventoryFood = -1;
-    static boolean initCheck = false;
 
 
     public static WorldPoint currentPlayerLocation;
@@ -109,11 +102,6 @@ public class KalphiteQueenScript extends Script {
                 if (!super.run()) return;
                 long startTime = System.currentTimeMillis();
 
-                if (!initCheck) {
-                    getFood();
-                    initCheck = true;
-                }
-
                 List<Rs2NpcModel> secondQueen = Rs2Npc.getNpcs(npcModel -> npcModel != null && npcModel.getId() == NPC_KQ2)
                         .collect(Collectors.toList());
                 boolean phaseTwo = !secondQueen.isEmpty();
@@ -122,44 +110,12 @@ public class KalphiteQueenScript extends Script {
                         .collect(Collectors.toList());
                 boolean phaseOne = !firstQueen.isEmpty();
 
-                var kalphiteNpcs = Rs2Npc.getNpcs("Kalphite", false);
-
-                for (Rs2NpcModel kalphiteNpc : kalphiteNpcs.collect(Collectors.toList())) {
-                    if (kalphiteNpc == null) continue;
-                    int npcAnimation = Rs2Reflection.getAnimation(kalphiteNpc);
-                    handleQueenPrayer(npcAnimation);
-                }
-
-                if (Rs2Player.eatAt(inventoryFood, true)) {
-                    Rs2Inventory.waitForInventoryChanges(1200);
-                }
-
-                if (Rs2Player.drinkAntiPoisonPotion()) {
-                    Rs2Player.waitForAnimation();
-                }
-
-                if (Rs2Player.drinkPrayerPotion()) {
-                    Rs2Player.waitForAnimation();
-                }
-
-                if (Rs2Player.getWorldLocation().getPlane() == 0) {
-                    if (Rs2Player.drinkCombatPotionAt(Skill.STRENGTH)) {
-                        Rs2Player.waitForAnimation();
-                    }
-                    if (Rs2Player.drinkCombatPotionAt(Skill.ATTACK)) {
-                        Rs2Player.waitForAnimation();
-                    }
-                    if (Rs2Player.drinkCombatPotionAt(Skill.DEFENCE)) {
-                        Rs2Player.waitForAnimation();
-                    }
-                }
-
-                if(Rs2Inventory.hasItem(ItemID.VIAL_EMPTY)) {
-                    Rs2Inventory.dropAll(ItemID.VIAL_EMPTY);
-                    Rs2Inventory.waitForInventoryChanges(1000);
-                }
-
                 if (!phaseOne && !phaseTwo) {
+                    if (lootExists) {
+                        toggle(PROTECT_MELEE);
+                        sleepUntilTrue(noLoot());
+                        return;
+                    }
                     if (!playerOn(WORKER_2)) {
                         Rs2Walker.walkFastCanvas(WORKER_2);
                         Rs2Player.waitForWalking();
@@ -182,6 +138,10 @@ public class KalphiteQueenScript extends Script {
                     if (setupQueen()) return;
                 }
 
+                if (!queenLured) {
+                    if (lureQueen()) return;
+                }
+
                 if (!phaseTwo) {
                     if (flinchQueen1()) return;
                 }
@@ -198,7 +158,7 @@ public class KalphiteQueenScript extends Script {
                 Microbot.log("Something went wrong in the KQ Script: " + ex.getMessage() + ". If the script is stuck, please contact us on discord with this log.");
                 ex.printStackTrace();
             }
-        }, 0, 10, TimeUnit.MILLISECONDS);
+        }, 0, 100, TimeUnit.MILLISECONDS);
         return true;
     }
 
@@ -206,7 +166,7 @@ public class KalphiteQueenScript extends Script {
         workersSetup = false;
         queenSetup = false;
         queenInteracting = false;
-        initCheck = false;
+        KalphiteQueenUtilScript.initCheck = false;
         inventoryFood = -1;
     }
 
@@ -222,66 +182,71 @@ public class KalphiteQueenScript extends Script {
     }
 
     private boolean setupWorkers() {
-        if (queenLocation != null && QUEEN_AREA_SAFE.contains(queenLocation)) {
-            if (playerOn(WORKER_2)) {
-                sleep(1200, 2400);
-                Microbot.log("Player is on Worker 2");
-                if ((!guardian0Interacting) || (!guardian1Interacting)) {
-                    Microbot.log("Grabbing Worker Aggro!");
-                    toggle(PROTECT_MELEE);
-                    Rs2Walker.walkFastCanvas(WORKER_1);
-                    Rs2Player.waitForWalking();
-                    interactAll(kalphiteGuardians, "Attack", 1200);
-                    Rs2Player.waitForXpDrop(Skill.HITPOINTS);
-                    Rs2Walker.walkFastCanvas(WORKER_2);
-                    Rs2Player.waitForWalking(1200);
-                    toggle(PROTECT_MELEE);
-                    sleep(4800);
-                    return false;
-                }
-            }
-
-            if ((guardian0Interacting) && (guardian1Interacting)) {
-                if (anyGuardianOn(WORKER_SETUP_1)
-                        && anyGuardianOn(WORKER_SETUP_2)) {
-                    workersSetup = true;
-                    Microbot.log("Workers are Setup");
-                    return true;
-                } else {
-                    Microbot.log("Trying to Unstack Workers 1");
-                    Rs2Walker.walkFastCanvas(UNSTACK_WORKER_1);
-                    sleep(4800);
-                    Rs2Walker.walkFastCanvas(WORKER_2);
-                    sleep(4800);
-                    if ((guardian0Interacting) || (guardian1Interacting)) {
-                        if (anyGuardianOn(WORKER_SETUP_1)
-                                && anyGuardianOn(WORKER_SETUP_2)) {
-                            workersSetup = true;
-                            Microbot.log("Workers are Setup");
-                            return true;
-                        } else {
-                            Microbot.log("Trying to Unstack Workers 2");
-                            toggle(PROTECT_MELEE);
-                            Rs2Walker.walkFastCanvas(UNSTACK_WORKER_2);
-                            sleep(4800);
-                            Rs2Walker.walkFastCanvas(WORKER_2);
-                            sleep(4800);
-                            toggle(PROTECT_MELEE);
-                            if ((guardian0Interacting) || (guardian1Interacting)) {
-                                if (anyGuardianOn(WORKER_SETUP_1)
-                                        && anyGuardianOn(WORKER_SETUP_2)) {
-                                    workersSetup = true;
-                                    Microbot.log("Workers are Setup");
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                }
-
+        if ((guardian0Interacting)
+                && (guardian1Interacting)
+                && anyGuardianOn(WORKER_SETUP_1)
+                && anyGuardianOn(WORKER_SETUP_2)) {
+            workersSetup = true;
+            Microbot.log("Workers are Setup");
+            return true;
+        }
+        if (queenLocation != null && !QUEEN_AREA_SAFE.contains(queenLocation)) {
+            Microbot.log("Queen Outside Area");
+            return false;
+        }
+        if (playerOn(WORKER_2)) {
+            sleep(1200, 2400);
+            Microbot.log("Player is on Worker 2");
+            if ((!guardian0Interacting) && (!guardian1Interacting)) {
+                Microbot.log("Grabbing Worker Aggro!");
+                toggle(PROTECT_MELEE);
+                Rs2Walker.walkFastCanvas(WORKER_1);
+                Rs2Player.waitForWalking();
+                interactAll(kalphiteGuardians, "Attack", 1200);
+                Rs2Player.waitForXpDrop(Skill.HITPOINTS);
+                Rs2Walker.walkFastCanvas(WORKER_2);
+                Rs2Player.waitForWalking(1200);
+                toggle(PROTECT_MELEE);
+                sleep(4800);
+                return false;
+            } else if ((guardian0Interacting) && (guardian1Interacting)) {
+                Microbot.log("Trying to Unstack Workers 2");
+                toggle(PROTECT_MELEE);
+                Rs2Walker.walkFastCanvas(UNSTACK_WORKER_2);
+                sleep(4800);
+                Microbot.log("Trying to Unstack Workers 1");
+                Rs2Walker.walkFastCanvas(UNSTACK_WORKER_1);
+                Rs2Player.waitForWalking();
+                toggle(PROTECT_MELEE);
+                sleep(4800);
+                Rs2Walker.walkFastCanvas(WORKER_2);
+                sleep(4800);
+                return false;
             }
         }
-        Microbot.log("Queen Outside Area");
+        if (playerOn(WORKER_2) && (!guardian0Interacting)){
+            toggle(PROTECT_MELEE);
+            Rs2Npc.interact(Rs2Npc.getNpcByIndex(0), "Attack");
+            sleep(4800);
+            Rs2Walker.walkFastCanvas(WORKER_2);
+            Rs2Player.waitForWalking();
+            toggle(PROTECT_MELEE);
+            return false;
+        }
+        if (playerOn(WORKER_2) && (!guardian1Interacting)){
+            toggle(PROTECT_MELEE);
+            Rs2Npc.interact(Rs2Npc.getNpcByIndex(1), "Attack");
+            sleep(4800);
+            Rs2Walker.walkFastCanvas(WORKER_2);
+            Rs2Player.waitForWalking();
+            toggle(PROTECT_MELEE);
+            return false;
+        }
+        if (playerOn(UNSTACK_WORKER_1)) {
+            Rs2Walker.walkFastCanvas(WORKER_2);
+            sleep(4800);
+            return false;
+        }
         return false;
     }
 
@@ -289,21 +254,7 @@ public class KalphiteQueenScript extends Script {
         if (queenSetup) {
             return true;
         }
-
         if (!workersSetup) return false;
-
-        if (queenLocation != null && QUEEN_AREA_SAFE.contains(queenLocation)) {
-            if (playerOn(WORKER_2)) {
-                Microbot.log("Player is on Worker 2, grabbing queen");
-                toggle(PROTECT_MELEE);
-                Rs2Walker.walkFastCanvas(KQ_1);
-                toggle(PROTECT_MAGIC);
-                Rs2Player.waitForWalking(4800);
-                Rs2Npc.interact(NPC_KQ, "Attack");
-                sleep(1200);
-            }
-        }
-
         if (queenInteracting) {
             Rs2Walker.walkFastCanvas(KQ_2);
             Rs2Player.waitForWalking();
@@ -311,222 +262,159 @@ public class KalphiteQueenScript extends Script {
                 Rs2Walker.walkFastCanvas(UNSTACK_KQ);
                 sleep(600);
                 Rs2Walker.walkFastCanvas(KQ_2);
+                return false;
             }
             if (queenOn(QUEEN_STUCK_2)) {
                 Rs2Walker.walkFastCanvas(UNSTACK_KQ);
                 sleep(600);
                 Rs2Walker.walkFastCanvas(KQ_2);
+                return false;
             }
-            if (anyGuardianOn(KALPHITE_SETUP_WORKER_1)
-                    && anyGuardianOn(KALPHITE_SETUP_WORKER_2)
-                    && queenOn(KALPHITE_SETUP_QUEEN)) {
-                Rs2Walker.walkFastCanvas(KQ_3);
-                Rs2Player.waitForWalking();
-                sleepUntilTrue(isAnyKalphiteInRange);
-                Rs2Walker.walkFastCanvas(QUEEN_SETUP_PLAYER_SAFE);
-                Rs2Player.waitForWalking();
+        }
+        if (queenLocation != null && QUEEN_AREA_SAFE.contains(queenLocation)) {
+            if (playerOn(WORKER_2)) {
+                Microbot.log("Player is on Worker 2, grabbing queen");
+                toggle(PROTECT_MELEE);
+                Rs2Walker.walkFastCanvas(KQ_1);
+                sleep(1200);
                 toggle(PROTECT_MAGIC);
-                queenSetup = true;
+                Rs2Player.waitForWalking(4800);
+                Rs2Npc.interact(NPC_KQ, "Attack");
+                sleep(1200);
+                return false;
+            }
+        }
+        if (anyGuardianOn(KALPHITE_SETUP_WORKER_1)
+                && anyGuardianOn(KALPHITE_SETUP_WORKER_2)
+                && queenOn(KALPHITE_SETUP_QUEEN)) {
+            queenSetup = true;
+            return true;
+        }
+        return false;
+    }
+
+    private boolean lureQueen() {
+        if (!queenSetup) return false;
+        if (queenLured) return true;
+        for (WorldPoint worldPoint : Arrays.asList(KQ_SAFE_SPOT_1, KQ_SAFE_SPOT_2, KQ_SAFE_SPOT_3)) {
+            if (queenOn(worldPoint) && playerOn(QUEEN_SETUP_PLAYER_SAFE)) {
+                queenLured = true;
                 return true;
             }
         }
-
+        if (playerOn(KQ_2)) {
+            Rs2Walker.walkFastCanvas(KQ_3);
+            Rs2Player.waitForWalking();
+            return false;
+        }
+        if (playerOn(KQ_3) && anyInAttackRange()) {
+            Rs2Walker.walkFastCanvas(QUEEN_SETUP_PLAYER_SAFE);
+            Rs2Player.waitForWalking();
+            toggle(PROTECT_MAGIC);
+            return false;
+        }
         return false;
     }
 
+    // 1. Adjusted flinch action methods: no initial moveTo
+    private void flinchRegularAction(WorldPoint spot) {
+        Microbot.log("Melee Flinch Action → " + spot);
+        // initial position assumed correct
+        toggle(PROTECT_MELEE);
+        toggle(getBestMeleePrayer());
+        Rs2Npc.interact(NPC_KQ, "Attack");
+        sleep(600);
+        // return to spot after attack
+        moveTo(spot);
+        toggle(PROTECT_MELEE);
+        toggle(getBestMeleePrayer());
+    }
+
+    private void flinchRegular2Action(WorldPoint spot) {
+        Microbot.log("Melee Flinch2 Action → " + spot);
+        // initial position assumed correct
+        toggle(getBestMeleePrayer());
+        Rs2Npc.interact(NPC_KQ2, "Attack");
+        sleep(600);
+        // return to spot after attack
+        moveTo(spot);
+        toggle(getBestMeleePrayer());
+    }
+
+    private void flinchWithSpecAction(WorldPoint spot) {
+        Microbot.log("Spec Flinch Action → " + spot);
+        // assume already at spot
+        int savedWeapon = Rs2Equipment.get(EquipmentInventorySlot.WEAPON).getId();
+        Rs2Inventory.equip(config.SpecWeapon().getName());
+        Rs2Inventory.waitForInventoryChanges(1200);
+        Microbot.getMouse().click(Rs2Widget.getWidget(10485795).getBounds());
+        sleep(1200);
+        toggle(getBestMeleePrayer());
+        Rs2Npc.interact(NPC_KQ2, "Attack");
+        sleep(600);
+        // return to spot
+        moveTo(spot);
+        toggle(getBestMeleePrayer());
+        Rs2Inventory.equip(savedWeapon);
+    }
+
+    // 2. In flinchQueen1/2: conditional moveTo before calling action
     private boolean flinchQueen1() {
-
-        if (queenOn(KQ_SAFE_SPOT_1)) {
-            Microbot.log("Queen on Safe 1");
-            if (!playerOn(KQ_FLINCH_SPOT_1)) {
-                Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_1);
-                Rs2Player.waitForWalking();
-            }
-            if (playerOn(KQ_FLINCH_SPOT_1)) {
-                toggle(PROTECT_MELEE);
-                toggle(getBestMeleePrayer());
-                Rs2Npc.interact(NPC_KQ, "Attack");
-                sleep(600);
-                Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_1);
-                Rs2Player.waitForWalking();
-                toggle(PROTECT_MELEE);
-                toggle(getBestMeleePrayer());
+        List<WorldPoint> safeSpots   = List.of(KQ_SAFE_SPOT_1, KQ_SAFE_SPOT_2, KQ_SAFE_SPOT_3);
+        List<WorldPoint> flinchSpots = List.of(KQ_FLINCH_SPOT_1, KQ_FLINCH_SPOT_2, KQ_FLINCH_SPOT_3);
+        boolean didFlinch = false;
+        for (int i = 0; i < safeSpots.size(); i++) {
+            if (queenOn(safeSpots.get(i))) {
+                WorldPoint spot = flinchSpots.get(i);
+                // Move there only if not already standing on it
+                if (!playerOn(spot)) {
+                    moveTo(spot);
+                }
+                flinchRegularAction(spot);
                 sleep(4800);
+                didFlinch = true;
             }
         }
-
-        if (queenOn(KQ_SAFE_SPOT_2)) {
-            Microbot.log("Queen on Safe 2");
-            if (!playerOn(KQ_FLINCH_SPOT_2)) {
-                Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_2);
-                Rs2Player.waitForWalking();
-            }
-            if (playerOn(KQ_FLINCH_SPOT_2)) {
-                toggle(PROTECT_MELEE);
-                toggle(getBestMeleePrayer());
-                Rs2Npc.interact(NPC_KQ, "Attack");
-                sleep(600);
-                Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_2);
-                Rs2Player.waitForWalking();
-                toggle(PROTECT_MELEE);
-                toggle(getBestMeleePrayer());
-                sleep(4800);
-            }
-        }
-
-        if (queenOn(KQ_SAFE_SPOT_3)) {
-            Microbot.log("Queen on Safe 3");
-            if (!playerOn(KQ_FLINCH_SPOT_3)) {
-                Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_3);
-                Rs2Player.waitForWalking();
-            }
-            if (playerOn(KQ_FLINCH_SPOT_3)) {
-                toggle(PROTECT_MELEE);
-                toggle(getBestMeleePrayer());
-                Rs2Npc.interact(NPC_KQ, "Attack");
-                sleep(600);
-                Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_3);
-                Rs2Player.waitForWalking();
-                toggle(PROTECT_MELEE);
-                toggle(getBestMeleePrayer());
-                sleep(4800);
-            }
-        }
-
-        return false;
+        return didFlinch;
     }
 
     private boolean flinchQueen2() {
-
-        if (Rs2Combat.getSpecEnergy() >= 250 && Rs2Inventory.hasItem(ItemID.DRAGON_MACE)) {
-            if (queenOn(KQ_SAFE_SPOT_1)) {
-                Microbot.log("Queen on Safe 1");
-                if (!playerOn(KQ_FLINCH_SPOT_1)) {
-                    Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_1);
-                    Rs2Player.waitForWalking();
-                }
-                if (playerOn(KQ_FLINCH_SPOT_1)) {
-                    Rs2ItemModel currentWeapon = Rs2Equipment.get(EquipmentInventorySlot.WEAPON);
-                    int savedWeaponId = -1;
-                    savedWeaponId = currentWeapon.getId();
-                    Rs2Inventory.equip(ItemID.DRAGON_MACE);
-                    Rs2Inventory.waitForInventoryChanges(1200);
-                    Microbot.getMouse().click(Rs2Widget.getWidget(10485795).getBounds());
-                    sleep(1200);
-                    toggle(getBestMeleePrayer());
-                    Rs2Npc.interact(NPC_KQ2, "Attack");
-                    sleep(600);
-                    Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_1);
-                    Rs2Player.waitForWalking();
-                    toggle(getBestMeleePrayer());
-                    Rs2Inventory.equip(savedWeaponId);
+        List<WorldPoint> safeSpots   = List.of(KQ_SAFE_SPOT_1, KQ_SAFE_SPOT_2, KQ_SAFE_SPOT_3);
+        List<WorldPoint> flinchSpots = List.of(KQ_FLINCH_SPOT_1, KQ_FLINCH_SPOT_2, KQ_FLINCH_SPOT_3);
+        boolean didFlinch = false;
+        if (isSpecAvailableInInventory(config.SpecWeapon())) {
+            for (int i = 0; i < safeSpots.size(); i++) {
+                if (queenOn(safeSpots.get(i))) {
+                    WorldPoint spot = flinchSpots.get(i);
+                    if (!playerOn(spot)) {
+                        moveTo(spot);
+                    }
+                    flinchWithSpecAction(spot);
                     sleep(4800);
-                }
-            }
-
-            if (queenOn(KQ_SAFE_SPOT_2)) {
-                Microbot.log("Queen on Safe 2");
-                if (!playerOn(KQ_FLINCH_SPOT_2)) {
-                    Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_2);
-                    Rs2Player.waitForWalking();
-                }
-                if (playerOn(KQ_FLINCH_SPOT_2)) {
-                    Rs2ItemModel currentWeapon = Rs2Equipment.get(EquipmentInventorySlot.WEAPON);
-                    int savedWeaponId = -1;
-                    savedWeaponId = currentWeapon.getId();
-                    Rs2Inventory.equip(ItemID.DRAGON_MACE);
-                    Rs2Inventory.waitForInventoryChanges(1200);
-                    Microbot.getMouse().click(Rs2Widget.getWidget(10485795).getBounds());
-                    sleep(1200);
-                    toggle(getBestMeleePrayer());
-                    Rs2Npc.interact(NPC_KQ2, "Attack");
-                    sleep(600);
-                    Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_2);
-                    Rs2Player.waitForWalking();
-                    toggle(getBestMeleePrayer());
-                    Rs2Inventory.equip(savedWeaponId);
-                    sleep(4800);
-                }
-            }
-
-            if (queenOn(KQ_SAFE_SPOT_3)) {
-                Microbot.log("Queen on Safe 3");
-                if (!playerOn(KQ_FLINCH_SPOT_3)) {
-                    Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_3);
-                    Rs2Player.waitForWalking();
-                }
-                if (playerOn(KQ_FLINCH_SPOT_3)) {
-                    Rs2ItemModel currentWeapon = Rs2Equipment.get(EquipmentInventorySlot.WEAPON);
-                    int savedWeaponId = -1;
-                    savedWeaponId = currentWeapon.getId();
-                    Rs2Inventory.equip(ItemID.DRAGON_MACE);
-                    Rs2Inventory.waitForInventoryChanges(1200);
-                    Microbot.getMouse().click(Rs2Widget.getWidget(10485795).getBounds());
-                    sleep(1200);
-                    toggle(getBestMeleePrayer());
-                    Rs2Npc.interact(NPC_KQ2, "Attack");
-                    sleep(600);
-                    Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_3);
-                    Rs2Player.waitForWalking();
-                    toggle(getBestMeleePrayer());
-                    Rs2Inventory.equip(savedWeaponId);
-                    sleep(4800);
+                    didFlinch = true;
                 }
             }
         }
-
-        if (queenOn(KQ_SAFE_SPOT_1)) {
-            Microbot.log("Queen on Safe 1");
-            if (!playerOn(KQ_FLINCH_SPOT_1)) {
-                Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_1);
-                Rs2Player.waitForWalking();
-            }
-            if (playerOn(KQ_FLINCH_SPOT_1)) {
-                toggle(getBestMeleePrayer());
-                Rs2Npc.interact(NPC_KQ2, "Attack");
-                sleep(600);
-                Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_1);
-                Rs2Player.waitForWalking();
-                toggle(getBestMeleePrayer());
+        for (int i = 0; i < safeSpots.size(); i++) {
+            if (queenOn(safeSpots.get(i))) {
+                WorldPoint spot = flinchSpots.get(i);
+                if (!playerOn(spot)) {
+                    moveTo(spot);
+                }
+                flinchRegular2Action(spot);
                 sleep(4800);
+                didFlinch = true;
             }
         }
-
-        if (queenOn(KQ_SAFE_SPOT_2)) {
-            Microbot.log("Queen on Safe 2");
-            if (!playerOn(KQ_FLINCH_SPOT_2)) {
-                Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_2);
-                Rs2Player.waitForWalking();
-            }
-            if (playerOn(KQ_FLINCH_SPOT_2)) {
-                toggle(getBestMeleePrayer());
-                Rs2Npc.interact(NPC_KQ2, "Attack");
-                sleep(600);
-                Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_2);
-                Rs2Player.waitForWalking();
-                toggle(getBestMeleePrayer());
-                sleep(4800);
-            }
-        }
-
-        if (queenOn(KQ_SAFE_SPOT_3)) {
-            Microbot.log("Queen on Safe 3");
-            if (!playerOn(KQ_FLINCH_SPOT_3)) {
-                Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_3);
-                Rs2Player.waitForWalking();
-            }
-            if (playerOn(KQ_FLINCH_SPOT_3)) {
-                toggle(getBestMeleePrayer());
-                Rs2Npc.interact(NPC_KQ2, "Attack");
-                sleep(600);
-                Rs2Walker.walkFastCanvas(KQ_FLINCH_SPOT_3);
-                Rs2Player.waitForWalking();
-                toggle(getBestMeleePrayer());
-                sleep(4800);
-            }
-        }
-        return false;
+        return didFlinch;
     }
+
+    // moveTo unchanged
+    private void moveTo(WorldPoint spot) {
+        Rs2Walker.walkFastCanvas(spot);
+        Rs2Player.waitForWalking();
+    }
+
 
     private boolean playerOn(WorldPoint target) {
         return currentPlayerLocation != null
@@ -559,9 +447,7 @@ public class KalphiteQueenScript extends Script {
         if (npcs == null || npcs.isEmpty()) {
             return false;
         }
-        // snapshot to avoid concurrent modification
         List<Rs2NpcModel> targets = new ArrayList<>(npcs);
-
         boolean allSucceeded = true;
         for (Rs2NpcModel npc : targets) {
             boolean ok = interact(npc, action);
@@ -582,35 +468,9 @@ public class KalphiteQueenScript extends Script {
         return () -> OUTSIDE_QUEENLAIR.contains(currentPlayerLocation);
     }
 
-    private void handleQueenPrayer(int animationId) {
-        if (animationId == 6241) {
-            guardianAttack = true;
-        } else if (animationId != 6241){
-            guardianAttack = false;
-        }
-        if (animationId == 1172) {
-            toggle(PROTECT_MAGIC, true);
-        } else if (animationId == 6240) {
-            toggle(PROTECT_RANGE, true);
-        }
-    }
-
     public static boolean anyInAttackRange() {
-        // Ignore the passed-in stream (which may have been consumed). Always use a fresh stream:
-        return Rs2Npc.getNpcs(npcModel -> {
-            String name = npcModel.getName();
-            return name != null && name.contains("Kalphite");
-        }).anyMatch(npc -> {
-            if (npc == null) return false;
-            try {
-                return isInAttackRange(npc);
-            } catch (Throwable t) {
-                Microbot.log("Range check error for NPC id=%d: %s", npc.getId(), t);
-                return false;
-            }
-        });
+        return isAnyKalphiteInRange.getAsBoolean();
     }
-
 
     public static final BooleanSupplier isAnyKalphiteInRange = () ->
             Rs2Npc.getNpcs(npc -> {
@@ -627,41 +487,6 @@ public class KalphiteQueenScript extends Script {
             });
     public static final BooleanSupplier notAnyKalphiteInRange = () ->
             !isAnyKalphiteInRange.getAsBoolean();
-
-
-    public static boolean toggleAutoRetaliate() {
-        int initValue = Microbot.getVarbitPlayerValue(172);
-        if (Microbot.getVarbitPlayerValue(172) == 1) {
-            Rs2Tab.switchToCombatOptionsTab();
-            sleepUntil(() -> Rs2Tab.getCurrentTab() == InterfaceTab.COMBAT, 2000);
-            Rs2Widget.clickWidget(38862879);
-            Microbot.getVarbitPlayerValue(172);
-            int finalValue = Microbot.getVarbitPlayerValue(172);
-            return  initValue != finalValue;
-        }
-        if (Microbot.getVarbitPlayerValue(172) == 0) {
-            Rs2Tab.switchToCombatOptionsTab();
-            sleepUntil(() -> Rs2Tab.getCurrentTab() == InterfaceTab.COMBAT, 2000);
-            Rs2Widget.clickWidget(38862879);
-            Microbot.getVarbitPlayerValue(172);
-            int finalValue = Microbot.getVarbitPlayerValue(172);
-            return  initValue != finalValue;
-        }
-        return false;
-    }
-
-    void getFood() {
-        Map<Integer, Rs2Food> localFoodMap = Arrays.stream(Rs2Food.values())
-                .collect(Collectors.toMap(Rs2Food::getId, f -> f));
-        Rs2Inventory.getInventoryFood()
-                .forEach(itemModel -> {
-                    if (itemModel == null) return;
-                    Rs2Food food = localFoodMap.get(itemModel.getId());
-                    if (food == null) return; // not in our enum list
-                    int healAmount = food.getHeal();
-                    inventoryFood = 95 - healAmount;
-               });
-    }
 
     boolean enterQueenLair(){
         if (playerOn(SAFE_OUTSIDE_LAIR)) {
@@ -739,6 +564,24 @@ public class KalphiteQueenScript extends Script {
         return playerOn(EDGETELEPORT);
     }
 
+    public static boolean isSpecAvailableInInventory(SpecWeapon sw) {
+        if (sw == SpecWeapon.NONE) {
+            return false;
+        }
+        // shield+2H full-inventory guard
+        if (Rs2Equipment.isWearingShield() && sw.is2H() && Rs2Inventory.isFull()) {
+            return false;
+        }
+        // energy check
+        if (Rs2Combat.getSpecEnergy() < sw.getEnergyRequired()) {
+            return false;
+        }
+        // inventory by name
+        return Rs2Inventory.hasItem(sw.getName());
+    }
 
+    public static final BooleanSupplier noLoot() {
+        return () -> !lootExists;
+    }
 
 }

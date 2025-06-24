@@ -10,6 +10,7 @@ import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.NpcDespawned;
 import net.runelite.api.events.NpcSpawned;
+import net.runelite.api.gameval.ItemID;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -19,6 +20,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.util.Global;
 import net.runelite.client.plugins.microbot.util.coords.Rs2WorldPoint;
+import net.runelite.client.plugins.microbot.util.gameobject.ObjectID;
 import net.runelite.client.plugins.microbot.util.npc.Rs2NpcModel;
 import net.runelite.client.plugins.microbot.util.player.Rs2Player;
 
@@ -51,6 +53,12 @@ public class KalphiteQueenPlugin extends Plugin {
     @Inject
     KalphiteQueenScript kalphiteQueenScript;
 
+    @Inject
+    KalphiteQueenUtilScript kalphiteQueenUtilScript;
+
+    @Inject
+    KalphiteQueenLootScript kalphiteQueenLootScript;
+
     public KalphiteQueenConfig getConfig() { return config; }
 
     private Rs2NpcModel kalphiteQueen;
@@ -74,16 +82,20 @@ public class KalphiteQueenPlugin extends Plugin {
     @Override
     protected void startUp() throws AWTException {
         kalphiteQueenScript.run(config);
+        kalphiteQueenUtilScript.run(config);
+        kalphiteQueenLootScript.run(config);
         KalphiteQueenScript.workersSetup = false;
         KalphiteQueenScript.queenSetup = false;
         KalphiteQueenScript.queenInteracting = false;
-        KalphiteQueenScript.initCheck = false;
+        KalphiteQueenUtilScript.initCheck = false;
         KalphiteQueenScript.inventoryFood = -1;
     }
 
     @Override
     protected void shutDown() {
         kalphiteQueenScript.shutdown();
+        kalphiteQueenUtilScript.shutdown();
+        kalphiteQueenLootScript.shutdown();
     }
 
     @Subscribe
@@ -127,6 +139,7 @@ public class KalphiteQueenPlugin extends Plugin {
                 if (playerWp != null) {
                     int dist = swWp.distanceTo(playerWp);
                     KalphiteQueenScript.queenDistance = dist;
+                    Microbot.log("Queen → dist=%d, SW at=%s", dist, swWp);
                 }
             }
             KalphiteQueenScript.queenInteracting = kalphiteQueen.isInteracting()
@@ -162,6 +175,7 @@ public class KalphiteQueenPlugin extends Plugin {
                 if (playerWp != null) {
                     int dist = swWp.distanceTo(playerWp);
                     KalphiteQueenScript.guardianDistances.add(dist);
+                    Microbot.log("Guardian → dist=%d, SW at=%s", dist, swWp);
                 } else {
                     KalphiteQueenScript.guardianDistances.add(-1);
                 }
@@ -173,30 +187,6 @@ public class KalphiteQueenPlugin extends Plugin {
                     && Objects.equals(g.getInteracting(), localPlayer);
             if (i == 0) KalphiteQueenScript.guardian0Interacting = interacting;
             if (i == 1) KalphiteQueenScript.guardian1Interacting = interacting;
-        }
-
-        boolean hasCalculatedAttackSpeed = false;
-        if (!hasCalculatedAttackSpeed)
-        {
-            // We rely on the static timestamps your Hitsplat listener already sets:
-            //   KalphiteQueenPlugin.lastMyHitTime  = time of most recent hitsplat
-            //   KalphiteQueenPlugin.prevMyHitTime  = time of the hit before that
-            // (Assuming you have those; if not, add them exactly as longs updated in your listener.)
-
-            long firstHitTime = -1;
-            long lastHitTime = -1;
-            if (firstHitTime < 0 && lastHitTime > 0)
-            {
-                // Capture the first hit timestamp
-                firstHitTime = lastHitTime;
-            }
-            else if (firstHitTime > 0 && lastHitTime > firstHitTime)
-            {
-                // Second hit: compute interval
-                KalphiteQueenScript.attackSpeed = (int)(lastHitTime - firstHitTime);
-                Microbot.log("Attack speed: %d ms", KalphiteQueenScript.attackSpeed);
-                hasCalculatedAttackSpeed = true;
-            }
         }
     }
 }
