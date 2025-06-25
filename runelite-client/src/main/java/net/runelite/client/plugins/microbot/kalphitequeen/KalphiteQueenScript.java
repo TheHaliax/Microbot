@@ -316,15 +316,12 @@ public class KalphiteQueenScript extends Script {
         return false;
     }
 
-    // 1. Adjusted flinch action methods: no initial moveTo
     private void flinchRegularAction(WorldPoint spot) {
         Microbot.log("Melee Flinch Action → " + spot);
-        // initial position assumed correct
         toggle(PROTECT_MELEE);
         toggle(getBestMeleePrayer());
         Rs2Npc.interact(NPC_KQ, "Attack");
         sleep(600);
-        // return to spot after attack
         moveTo(spot);
         toggle(PROTECT_MELEE);
         toggle(getBestMeleePrayer());
@@ -332,11 +329,9 @@ public class KalphiteQueenScript extends Script {
 
     private void flinchRegular2Action(WorldPoint spot) {
         Microbot.log("Melee Flinch2 Action → " + spot);
-        // initial position assumed correct
         toggle(getBestMeleePrayer());
         Rs2Npc.interact(NPC_KQ2, "Attack");
         sleep(600);
-        // return to spot after attack
         moveTo(spot);
         toggle(getBestMeleePrayer());
     }
@@ -352,13 +347,11 @@ public class KalphiteQueenScript extends Script {
         toggle(getBestMeleePrayer());
         Rs2Npc.interact(NPC_KQ2, "Attack");
         sleep(600);
-        // return to spot
         moveTo(spot);
         toggle(getBestMeleePrayer());
         Rs2Inventory.equip(savedWeapon);
     }
 
-    // 2. In flinchQueen1/2: conditional moveTo before calling action
     private boolean flinchQueen1() {
         List<WorldPoint> safeSpots   = List.of(KQ_SAFE_SPOT_1, KQ_SAFE_SPOT_2, KQ_SAFE_SPOT_3);
         List<WorldPoint> flinchSpots = List.of(KQ_FLINCH_SPOT_1, KQ_FLINCH_SPOT_2, KQ_FLINCH_SPOT_3);
@@ -366,7 +359,6 @@ public class KalphiteQueenScript extends Script {
         for (int i = 0; i < safeSpots.size(); i++) {
             if (queenOn(safeSpots.get(i))) {
                 WorldPoint spot = flinchSpots.get(i);
-                // Move there only if not already standing on it
                 if (!playerOn(spot)) {
                     moveTo(spot);
                 }
@@ -409,7 +401,6 @@ public class KalphiteQueenScript extends Script {
         return didFlinch;
     }
 
-    // moveTo unchanged
     private void moveTo(WorldPoint spot) {
         Rs2Walker.walkFastCanvas(spot);
         Rs2Player.waitForWalking();
