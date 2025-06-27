@@ -1,4 +1,4 @@
-package net.runelite.client.plugins.microbot.kalphitequeen.data;
+package net.runelite.client.plugins.microbot.Hal.kalphitequeen.data;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;

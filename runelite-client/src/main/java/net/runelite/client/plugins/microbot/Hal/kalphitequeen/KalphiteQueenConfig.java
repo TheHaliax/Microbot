@@ -1,8 +1,8 @@
-package net.runelite.client.plugins.microbot.kalphitequeen;
+package net.runelite.client.plugins.microbot.Hal.kalphitequeen;
 
 import net.runelite.client.config.*;
-import net.runelite.client.plugins.microbot.kalphitequeen.data.LooterStyle;
-import net.runelite.client.plugins.microbot.kalphitequeen.data.SpecWeapon;
+import net.runelite.client.plugins.microbot.Hal.kalphitequeen.data.LooterStyle;
+import net.runelite.client.plugins.microbot.Hal.kalphitequeen.data.SpecWeapon;
 
 @ConfigGroup("kalphitequeen")
 @ConfigInformation("This Plugin is totally fucked")

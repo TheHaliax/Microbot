@@ -1,4 +1,4 @@
-package net.runelite.client.plugins.microbot.kalphitequeen;
+package net.runelite.client.plugins.microbot.Hal.kalphitequeen;
 
 import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.Skill;
@@ -7,7 +7,7 @@ import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
-import net.runelite.client.plugins.microbot.kalphitequeen.data.SpecWeapon;
+import net.runelite.client.plugins.microbot.Hal.kalphitequeen.data.SpecWeapon;
 import net.runelite.client.plugins.microbot.util.combat.Rs2Combat;
 import net.runelite.client.plugins.microbot.util.equipment.Rs2Equipment;
 import net.runelite.client.plugins.microbot.util.gameobject.Rs2GameObject;
@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
-import static net.runelite.client.plugins.microbot.kalphitequeen.KalphiteQueenLootScript.lootExists;
+import static net.runelite.client.plugins.microbot.Hal.kalphitequeen.KalphiteQueenLootScript.lootExists;
 import static net.runelite.client.plugins.microbot.util.npc.Rs2Npc.interact;
 import static net.runelite.client.plugins.microbot.util.npc.Rs2Npc.isInAttackRange;
 import static net.runelite.client.plugins.microbot.util.prayer.Rs2Prayer.getBestMeleePrayer;
@@ -95,6 +95,7 @@ public class KalphiteQueenScript extends Script {
 
 
     public boolean run(KalphiteQueenConfig config) {
+        Microbot.pauseAllScripts.compareAndSet(true, false);;
         this.config = config;
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
             try {

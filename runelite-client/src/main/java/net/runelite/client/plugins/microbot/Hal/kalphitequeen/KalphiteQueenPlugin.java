@@ -1,40 +1,26 @@
-package net.runelite.client.plugins.microbot.kalphitequeen;
+package net.runelite.client.plugins.microbot.Hal.kalphitequeen;
 
 import com.google.inject.Provides;
-import net.runelite.api.NPC;
 import net.runelite.api.NPCComposition;
 import net.runelite.api.Perspective;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameTick;
-import net.runelite.api.events.NpcDespawned;
-import net.runelite.api.events.NpcSpawned;
-import net.runelite.api.gameval.ItemID;
-import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.game.NpcInfo;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.microbot.Microbot;
-import net.runelite.client.plugins.microbot.util.Global;
-import net.runelite.client.plugins.microbot.util.coords.Rs2WorldPoint;
-import net.runelite.client.plugins.microbot.util.gameobject.ObjectID;
 import net.runelite.client.plugins.microbot.util.npc.Rs2NpcModel;
-import net.runelite.client.plugins.microbot.util.player.Rs2Player;
 
 import javax.inject.Inject;
 import java.awt.*;
 import java.util.List;
-import java.util.ArrayList;
 import java.util.Objects;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static net.runelite.client.plugins.microbot.util.npc.Rs2Npc.getNpcs;
-import static net.runelite.client.plugins.microbot.util.player.Rs2Player.getRs2WorldPoint;
 
 @PluginDescriptor(
         name = PluginDescriptor.Hal + " KalphiteQueen",

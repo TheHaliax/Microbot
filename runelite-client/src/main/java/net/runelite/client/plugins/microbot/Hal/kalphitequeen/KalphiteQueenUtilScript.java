@@ -1,4 +1,4 @@
-package net.runelite.client.plugins.microbot.kalphitequeen;
+package net.runelite.client.plugins.microbot.Hal.kalphitequeen;
 
 import net.runelite.api.Skill;
 import net.runelite.api.gameval.ItemID;
@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static net.runelite.client.plugins.microbot.kalphitequeen.data.Thralls.*;
+import static net.runelite.client.plugins.microbot.Hal.kalphitequeen.data.Thralls.*;
 import static net.runelite.client.plugins.microbot.runecrafting.gotr.GotrScript.totalTime;
 import static net.runelite.client.plugins.microbot.util.prayer.Rs2Prayer.toggle;
 import static net.runelite.client.plugins.microbot.util.prayer.Rs2PrayerEnum.PROTECT_MAGIC;
@@ -32,6 +32,7 @@ public class KalphiteQueenUtilScript extends Script {
     static boolean initCheck = false;
 
     public boolean run(KalphiteQueenConfig config) {
+        Microbot.pauseAllScripts.compareAndSet(true, false);;
         this.config = config;
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
             try {

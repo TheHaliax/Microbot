@@ -40,7 +40,6 @@ public class ExamplePlugin extends Plugin {
     protected void startUp() throws AWTException {
         if (overlayManager != null) {
             overlayManager.add(exampleOverlay);
-            exampleOverlay.myButton.hookMouseListener();
         }
         exampleScript.run(config);
     }
@@ -48,7 +47,6 @@ public class ExamplePlugin extends Plugin {
     protected void shutDown() {
         exampleScript.shutdown();
         overlayManager.remove(exampleOverlay);
-        exampleOverlay.myButton.unhookMouseListener();
     }
     int ticks = 10;
     @Subscribe
