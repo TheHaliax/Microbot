@@ -2,7 +2,7 @@ package net.runelite.client.plugins.microbot.bankjs.BanksBankStander;
 
 import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.Item;
-import net.runelite.api.ItemID;
+import net.runelite.api.gameval.ItemID;
 import net.runelite.client.plugins.microbot.Microbot;
 import net.runelite.client.plugins.microbot.Script;
 import net.runelite.client.plugins.microbot.util.bank.Rs2Bank;
@@ -18,6 +18,7 @@ import javax.inject.Inject;
 import java.awt.event.KeyEvent;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static net.runelite.client.plugins.microbot.util.Global.sleepUntilTrue;
 import static net.runelite.client.plugins.microbot.util.inventory.Rs2Inventory.calculateInteractOrder;
@@ -69,7 +70,7 @@ public class BanksBankStanderScript extends Script {
         thirdItemId = TryParseInt(config.thirdItemIdentifier());
         fourthItemId = TryParseInt(config.fourthItemIdentifier());
 
-        inventorySlots = calculateInteractOrder(new ArrayList<>(Rs2Inventory.items()), config.interactOrder());
+        inventorySlots = calculateInteractOrder(new ArrayList<>(Rs2Inventory.items().collect(Collectors.toList())), config.interactOrder());
 
         mainScheduledFuture = scheduledExecutorService.scheduleWithFixedDelay(() -> {
             if (!Microbot.isLoggedIn()) return;
@@ -230,7 +231,7 @@ public class BanksBankStanderScript extends Script {
             isWaitingForPrompt = false; // Ensure prompt flag is reset
             if (secondItemId != null) {
                 if(config.amuletOfChemistry()){
-                    sleepUntil(() -> !Rs2Inventory.hasItem(secondItemId) || (!Rs2Equipment.isWearing(ItemID.AMULET_OF_CHEMISTRY) && !Rs2Equipment.isWearing(ItemID.ALCHEMISTS_AMULET_29990)), 40000);
+                    sleepUntil(() -> !Rs2Inventory.hasItem(secondItemId) || (!Rs2Equipment.isWearing(ItemID.AMULET_OF_CHEMISTRY) && !Rs2Equipment.isWearing(ItemID.AMULET_OF_CHEMISTRY_IMBUED_CHARGED)), 40000);
                     sleep(calculateSleepDuration(1));
                     checkForAmulet();
 //                    if(Rs2Bank.isOpen()) {
@@ -423,14 +424,14 @@ public class BanksBankStanderScript extends Script {
         }
     }
     private void checkForAmulet(){
-        if (!Rs2Equipment.isWearing(ItemID.AMULET_OF_CHEMISTRY) && !Rs2Equipment.isWearing(ItemID.ALCHEMISTS_AMULET_29990)){
+        if (!Rs2Equipment.isWearing(ItemID.AMULET_OF_CHEMISTRY) && !Rs2Equipment.isWearing(ItemID.AMULET_OF_CHEMISTRY_IMBUED_CHARGED)){
             Rs2ItemModel currentAmulet = Rs2Equipment.get(EquipmentInventorySlot.AMULET);
             if (!Rs2Bank.isOpen()) {
                 Rs2Bank.openBank();
                 sleepUntil(Rs2Bank::isOpen);
             }
-            if (Rs2Bank.isOpen() && Rs2Bank.hasItem(ItemID.ALCHEMISTS_AMULET_29990)){
-                Rs2Bank.withdrawAndEquip(ItemID.ALCHEMISTS_AMULET_29990);
+            if (Rs2Bank.isOpen() && Rs2Bank.hasItem(ItemID.AMULET_OF_CHEMISTRY_IMBUED_CHARGED)){
+                Rs2Bank.withdrawAndEquip(ItemID.AMULET_OF_CHEMISTRY_IMBUED_CHARGED);
             } else if (Rs2Bank.isOpen() && Rs2Bank.hasItem(ItemID.AMULET_OF_CHEMISTRY)) {
                 Rs2Bank.withdrawAndEquip(ItemID.AMULET_OF_CHEMISTRY);
             } else {

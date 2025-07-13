@@ -108,7 +108,10 @@ public class AgilityScript extends Script
 					return;
 				}
 
-				getAlchItem().ifPresent(item -> Rs2Magic.alch(item, 50, 75));
+				if (config.alchemy())
+				{
+					getAlchItem().ifPresent(item -> Rs2Magic.alch(item, 50, 75));
+				}
 
 				if (plugin.getCourseHandler() instanceof PrifddinasCourse)
 				{
@@ -196,6 +199,7 @@ public class AgilityScript extends Script
 	private boolean lootMarksOfGrace()
 	{
 		final List<RS2Item> marksOfGrace = AgilityPlugin.getMarksOfGrace();
+		final int lootDistance = plugin.getCourseHandler().getLootDistance();
 		if (!marksOfGrace.isEmpty() && !Rs2Inventory.isFull())
 		{
 			for (RS2Item markOfGraceTile : marksOfGrace)
@@ -204,7 +208,7 @@ public class AgilityScript extends Script
 				{
 					continue;
 				}
-				if (!Rs2GameObject.canReach(markOfGraceTile.getTile().getWorldLocation(), 1, 1, 1, 1))
+				if (!Rs2GameObject.canReach(markOfGraceTile.getTile().getWorldLocation(), lootDistance, lootDistance, lootDistance, lootDistance))
 				{
 					continue;
 				}
@@ -246,7 +250,7 @@ public class AgilityScript extends Script
 		{
 			return false;
 		}
-		if (Rs2Player.getBoostedSkillLevel(Skill.AGILITY) >= plugin.getCourseHandler().getRequiredLevel())
+		if (Rs2Player.getBoostedSkillLevel(Skill.AGILITY) > plugin.getCourseHandler().getRequiredLevel())
 		{
 			return false;
 		}

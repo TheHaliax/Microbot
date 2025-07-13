@@ -368,10 +368,7 @@ public class DemonicGorillaScript extends Script {
 
             // Handle AOE attack
             if (currentAnimation == DEMONIC_GORILLA_AOE_ATTACK && demonicGorillaRockPosition != null) {
-                List<WorldPoint> dangerousWorldPoints = Rs2Tile.getDangerousGraphicsObjectTiles()
-                        .stream()
-                        .map(Pair::getKey)
-                        .collect(Collectors.toList());
+                List<WorldPoint> dangerousWorldPoints = new ArrayList<>(Rs2Tile.getDangerousGraphicsObjectTiles().keySet());
                 dangerousWorldPoints.add(Microbot.getClient().getLocalPlayer().getWorldLocation());
                 dangerousWorldPoints.add(currentTarget.getWorldLocation());
                 dangerousWorldPoints.add(location);
@@ -648,7 +645,7 @@ public class DemonicGorillaScript extends Script {
         int currentHealth = Microbot.getClient().getBoostedSkillLevel(Skill.HITPOINTS);
         int currentPrayer = Microbot.getClient().getBoostedSkillLevel(Skill.PRAYER);
         boolean noFood = Rs2Inventory.getInventoryFood().isEmpty();
-        boolean noPrayerPotions = Rs2Inventory.items().stream()
+        boolean noPrayerPotions = Rs2Inventory.items()
                 .noneMatch(item -> item != null && item.getName() != null && !Rs2Potion.getPrayerPotionsVariants().contains(item.getName()));
 
         return (noFood && currentHealth <= config.healthThreshold()) || (noPrayerPotions && currentPrayer < 10);
@@ -681,7 +678,7 @@ public class DemonicGorillaScript extends Script {
     }
 
     private void consumePotion(List<String> keyword) {
-        var potion = Rs2Inventory.get(keyword);
+        var potion = Rs2Inventory.get(keyword.toArray(String[]::new));
         if (potion != null) {
             Rs2Inventory.interact(potion, "Drink");
         }

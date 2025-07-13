@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Scanner;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -30,10 +31,10 @@ import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import net.runelite.api.Point;
 import net.runelite.api.*;
 import net.runelite.api.annotations.Component;
 import net.runelite.api.events.ItemContainerChanged;
@@ -65,6 +66,8 @@ import net.runelite.client.plugins.microbot.qualityoflife.scripts.pouch.PouchScr
 import static net.runelite.client.plugins.microbot.util.Global.sleep;
 import static net.runelite.client.plugins.microbot.util.Global.sleepUntil;
 import static net.runelite.client.plugins.microbot.util.Global.sleepUntilNotNull;
+import static net.runelite.client.plugins.microbot.util.gameobject.Rs2GameObject.get;
+
 import net.runelite.client.plugins.microbot.util.inventory.Rs2ItemModel;
 import net.runelite.client.plugins.microbot.util.item.Rs2ItemManager;
 import net.runelite.client.plugins.microbot.util.menu.NewMenuEntry;
@@ -80,16 +83,9 @@ import net.runelite.client.ui.overlay.worldmap.WorldMapPointManager;
 import net.runelite.client.util.WorldUtil;
 import net.runelite.http.api.worlds.World;
 import org.slf4j.event.Level;
-
 @Slf4j
-public class Microbot
-{
-
-	public Microbot()
-	{
-		// Empty Constructor for static class
-	}
-
+@NoArgsConstructor
+public class Microbot {
 	//Version path used to load the client faster when developing by checking version number
 	//If the version is the same as the current version we do not download the latest .jar
 	//Resulting in a faster startup
@@ -229,9 +225,9 @@ public class Microbot
 		return getClientThread().runOnClientThreadOptional(() -> getClient().getVarbitValue(varbit)).orElse(0);
 	}
 
-	public static int getVarbitPlayerValue(int varbit)
+	public static int getVarbitPlayerValue(int varpId)
 	{
-		return getClientThread().runOnClientThreadOptional(() -> getClient().getVarpValue(varbit)).orElse(0);
+		return getClientThread().runOnClientThreadOptional(() -> getClient().getVarpValue(varpId)).orElse(0);
 	}
 
 	public static EnumComposition getEnum(int id)
@@ -321,6 +317,8 @@ public class Microbot
 				return false;
 			}
 			final net.runelite.api.World rsWorld = Microbot.getClient().createWorld();
+			if (rsWorld == null) return false;
+
 			quickHopTargetWorld = rsWorld;
 			rsWorld.setActivity(newWorld.getActivity());
 			rsWorld.setAddress(newWorld.getAddress());
@@ -328,10 +326,7 @@ public class Microbot
 			rsWorld.setPlayerCount(newWorld.getPlayers());
 			rsWorld.setLocation(newWorld.getLocation());
 			rsWorld.setTypes(WorldUtil.toWorldTypes(newWorld.getTypes()));
-			if (rsWorld == null)
-			{
-				return false;
-			}
+
 			Microbot.getClient().openWorldHopper();
 			Microbot.getClient().hopToWorld(rsWorld);
 			quickHopTargetWorld = null;
@@ -352,14 +347,20 @@ public class Microbot
 	{
 		try
 		{
-			SwingUtilities.invokeAndWait(() ->
+			Runnable messageRunnable = () ->
 			{
 				JOptionPane.showConfirmDialog(null, message, "Message",
 					JOptionPane.DEFAULT_OPTION);
-			});
+			};
+			if (SwingUtilities.isEventDispatchThread()) {
+				messageRunnable.run();
+			} else {
+				SwingUtilities.invokeAndWait(messageRunnable);
+			}
 		}
 		catch (Exception ex)
 		{
+			log.error("Error displaying message {}: {}", message, ex.getMessage(), ex);
 			ex.printStackTrace();
 		}
 	}
@@ -368,31 +369,29 @@ public class Microbot
 	{
 		try
 		{
-			SwingUtilities.invokeAndWait(() -> {
-				final JOptionPane optionPane = new JOptionPane(
-					message,
-					JOptionPane.INFORMATION_MESSAGE,
-					JOptionPane.DEFAULT_OPTION
-				);
-
-				final JDialog dialog = optionPane.createDialog("Message");
-
-				// Set up timer to close the dialog after 10 seconds
-				Timer timer = new Timer(disposeTime, e -> {
-					dialog.dispose();
-				});
+			Runnable messageRunnable = () ->
+			{
+				JOptionPane pane = new JOptionPane(message, JOptionPane.INFORMATION_MESSAGE);
+				JDialog dialog = pane.createDialog("Message");
+				dialog.setModal(false);
+				dialog.setVisible(true);
+				Timer timer = new Timer(disposeTime, e -> dialog.dispose());
 				timer.setRepeats(false);
 				timer.start();
-				dialog.setVisible(true);
-				timer.stop();
-			});
+
+			};
+			if (SwingUtilities.isEventDispatchThread()) {
+				messageRunnable.run();
+			} else {
+				SwingUtilities.invokeAndWait(messageRunnable);
+			}
 		}
 		catch (Exception ex)
 		{
+			log.error("Error displaying message {}: {}", message, ex.getMessage(), ex);
 			ex.printStackTrace();
 		}
 	}
-
 
 	public static List<Rs2ItemModel> updateItemContainer(int id, ItemContainerChanged e)
 	{
@@ -422,32 +421,52 @@ public class Microbot
 		return null;
 	}
 
+	@SneakyThrows
+	private static boolean togglePlugin(Plugin plugin, boolean enable) {
+		if (plugin == null) return false;
+		final AtomicBoolean success = new AtomicBoolean(false);
+		Runnable runnable = () -> {
+        	try {
+				getPluginManager().setPluginEnabled(plugin, enable);
+				if (enable) {
+					success.set(getPluginManager().startPlugin(plugin));
+					getPluginManager().startPlugins();
+				} else {
+					success.set(getPluginManager().stopPlugin(plugin));
+				}
+			} catch (PluginInstantiationException e) {
+				log.error("Error toggling plugin {} ({}): {}", success.get() ? "on" : "off", plugin.getClass().getSimpleName(), e.getMessage(), e);
+				e.printStackTrace();
+			}
+		};
+
+		if (SwingUtilities.isEventDispatchThread()) {
+			runnable.run();
+		} else {
+			// Ensure the runnable is executed on the Event Dispatch Thread
+			// This is necessary for Swing components and plugin management
+			SwingUtilities.invokeLater(runnable);
+		}
+
+		return success.get();
+	}
+
 	/**
 	 * Starts the specified plugin by enabling it and starting all plugins in the plugin manager.
 	 * This method checks if the provided plugin is non-null before proceeding.
 	 *
 	 * @param plugin the plugin to be started.
 	 */
-	@SneakyThrows
-	public static void startPlugin(Plugin plugin)
-	{
-		if (plugin == null)
-		{
-			return;
-		}
-		SwingUtilities.invokeAndWait(() ->
-		{
-			try
-			{
-				getPluginManager().setPluginEnabled(plugin, true);
-				getPluginManager().startPlugin(plugin);
-				getPluginManager().startPlugins();
-			}
-			catch (Exception e)
-			{
-				e.printStackTrace();
-			}
-		});
+	public static boolean startPlugin(Plugin plugin) {
+		return togglePlugin(plugin, true);
+	}
+
+	public static boolean startPlugin(Class<? extends Plugin> clazz) {
+		return startPlugin(getPlugin(clazz));
+	}
+
+	public static boolean startPlugin(String className) {
+		return startPlugin(getPlugin(className));
 	}
 
 	/**
@@ -458,12 +477,16 @@ public class Microbot
 	 *                  For example: {@code BreakHandlerPlugin.getClass().getName()}.
 	 * @return the plugin instance matching the specified class name, or {@code null} if no such plugin is found.
 	 */
-	public static Plugin getPlugin(String className)
-	{
+	public static Plugin getPlugin(String className) {
 		return getPluginManager().getPlugins().stream()
 			.filter(plugin -> plugin.getClass().getName().equals(className))
-			.findFirst()
-			.orElse(null);
+			.findFirst().orElse(null);
+	}
+
+	public static <T extends Plugin> T getPlugin(Class<T> clazz) {
+		return getPluginManager().getPlugins().stream()
+				.filter(plugin -> plugin.getClass() == clazz)
+				.map(clazz::cast).findFirst().orElse(null);
 	}
 
 	/**
@@ -472,26 +495,16 @@ public class Microbot
 	 *
 	 * @param plugin the plugin to be stopped.
 	 */
-	@SneakyThrows
-	public static void stopPlugin(Plugin plugin)
-	{
-		if (plugin == null)
-		{
-			return;
-		}
-		SwingUtilities.invokeAndWait(() ->
-		{
-			try
-			{
-				getPluginManager().setPluginEnabled(plugin, false);
-				getPluginManager().stopPlugin(plugin);
-				//getPluginManager().startPlugins();
-			}
-			catch (PluginInstantiationException e)
-			{
-				e.printStackTrace();
-			}
-		});
+	public static boolean stopPlugin(Plugin plugin) {
+		return togglePlugin(plugin, false);
+	}
+
+	public static boolean stopPlugin(Class<? extends Plugin> clazz) {
+		return stopPlugin(getPlugin(clazz));
+	}
+
+	public static boolean stopPlugin(String className) {
+		return stopPlugin(getPlugin(className));
 	}
 
 	public static void doInvoke(NewMenuEntry entry, Rectangle rectangle)
@@ -675,23 +688,6 @@ public class Microbot
 				log.info(message);
 				break;
 		}
-
-		if (Microbot.isLoggedIn())
-		{
-			if (level == Level.DEBUG && !isDebug())
-			{
-				return;
-			}
-
-			final String _message = ex == null ? message : ex.getMessage();
-
-			LocalTime currentTime = LocalTime.now();
-			DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss");
-			String formattedTime = currentTime.format(formatter);
-			Microbot.getClientThread().runOnClientThreadOptional(() ->
-				Microbot.getClient().addChatMessage(ChatMessageType.ENGINE, "", "[" + formattedTime + "]: " + _message, "", false)
-			);
-		}
 	}
 
 	/**
@@ -741,24 +737,16 @@ public class Microbot
 		});
 	}
 
-	private static boolean isPluginEnabled(String name)
-	{
-		Plugin dashboard = Microbot.getPluginManager().getPlugins().stream()
-			.filter(x -> x.getClass().getName().equals(name))
-			.findFirst()
-			.orElse(null);
-
-		if (dashboard == null)
-		{
-			return false;
-		}
-
-		return Microbot.getPluginManager().isPluginEnabled(dashboard);
+	public static boolean isPluginEnabled(Plugin plugin) {
+		return plugin != null && Microbot.getPluginManager().isPluginEnabled(plugin);
 	}
 
-	public static boolean isPluginEnabled(Class<?> c)
-	{
-		return isPluginEnabled(c.getName());
+	public static boolean isPluginEnabled(Class<? extends Plugin> clazz) {
+		return isPluginEnabled(getPlugin(clazz));
+	}
+
+	private static boolean isPluginEnabled(String name) {
+		return isPluginEnabled(getPlugin(name));
 	}
 
 	@Deprecated(since = "1.6.2 - Use Rs2Player variant")

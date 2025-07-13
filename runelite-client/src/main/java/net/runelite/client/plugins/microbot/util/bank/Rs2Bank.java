@@ -549,9 +549,9 @@ public class Rs2Bank {
         }
 
         if (hasX && configuredX == amount) {
-            int before = Rs2Inventory.size();
+            final int before = Rs2Inventory.count();
             invokeMenu(xSetOffset, rs2Item);
-            if (safe) return sleepUntilTrue(() -> Rs2Inventory.size() != before, 100, 2500);
+            if (safe) return sleepUntilTrue(() -> Rs2Inventory.count() != before, 100, 2500);
             return true;
         }
 
@@ -643,7 +643,7 @@ public class Rs2Bank {
 
     public static boolean depositAll(Predicate<Rs2ItemModel> predicate) {
         boolean result = false;
-        List<Rs2ItemModel> items = Rs2Inventory.items().stream().filter(predicate).distinct().collect(Collectors.toList());
+        List<Rs2ItemModel> items = Rs2Inventory.items(predicate).distinct().collect(Collectors.toList());
         for (Rs2ItemModel item : items) {
             if (item == null) continue;
             depositAll(item);
@@ -1761,12 +1761,10 @@ public class Rs2Bank {
         Rs2Player.toggleRunEnergy(toggleRun);
         Microbot.status = "Walking to nearest bank " + bankLocation.toString();
         boolean result = Rs2Walker.getDistanceBetween(Microbot.getClient().getLocalPlayer().getWorldLocation(), bankLocation.getWorldPoint()) <= 8;
-        if (result) {
-            return Rs2Bank.useBank();
-        } else {
+        if (!result) {
             Rs2Walker.walkTo(bankLocation.getWorldPoint());
         }
-        return false;
+        return Rs2Bank.useBank();
     }
 
     /**
