@@ -191,6 +191,9 @@ public class ShortestPathPlugin extends Plugin implements KeyListener {
     @Getter
     @Setter
     public static volatile Pathfinder pathfinder;
+    private static volatile Pathfinder precalcLegPathfinder;
+    private static volatile Future<?> precalcLegFuture;
+    private static volatile WorldPoint precalcLegTo;
     @Getter
     public static PathfinderConfig pathfinderConfig;
     @Getter
@@ -307,10 +310,114 @@ public class ShortestPathPlugin extends Plugin implements KeyListener {
 
     //Method from microbot
     public static void exit() {
+        cancelPrecalcLeg();
         if (pathfindingExecutor != null) {
             Rs2Walker.setTarget(null);
             pathfindingExecutor.shutdownNow();
             pathfindingExecutor = null;
+        }
+    }
+
+    /**
+     * Background path to the next queued leg. Uses a separate pathfinder slot; does not cancel the active walk pathfinder.
+     */
+    public static void precalcLegPathAsync(WorldPoint fromHint, WorldPoint to) {
+        if (to == null || pathfinderConfig == null) {
+            return;
+        }
+        WorldPoint from = fromHint;
+        if (from == null) {
+            from = Rs2Walker.getCurrentTarget();
+        }
+        if (from == null) {
+            from = Microbot.getClientThread().invoke(() -> net.runelite.client.plugins.microbot.util.player.Rs2Player.getWorldLocation());
+        }
+        if (from == null) {
+            return;
+        }
+
+        cancelPrecalcLeg();
+
+        final WorldPoint start = from;
+        final WorldPoint end = to;
+        precalcLegTo = end;
+
+        ExecutorService executor;
+        synchronized (pathfinderMutex) {
+            if ((executor = pathfindingExecutor) == null) {
+                ThreadFactory shortestPathNaming = new ThreadFactoryBuilder().setNameFormat("shortest-path-%d").build();
+                executor = Executors.newSingleThreadExecutor(shortestPathNaming);
+                pathfindingExecutor = executor;
+            }
+        }
+
+        final ExecutorService finalExecutor = executor;
+        precalcLegFuture = finalExecutor.submit(() -> {
+            try {
+                pathfinderConfig.refresh(end);
+                Set<WorldPoint> ends = new HashSet<>();
+                ends.add(end);
+                pathfinderConfig.filterLocations(ends, true);
+                Pathfinder pf = new Pathfinder(pathfinderConfig, start, ends);
+                pf.run();
+                synchronized (pathfinderMutex) {
+                    if (end.equals(precalcLegTo)) {
+                        precalcLegPathfinder = pf;
+                    } else {
+                        pf.cancel();
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[ShortestPath] precalc leg failed {} -> {}", start, end, e);
+            }
+        });
+    }
+
+    /**
+     * Promotes a finished precalc pathfinder into the main slot when the next leg starts.
+     *
+     * @return true when precalc was applied; caller should skip {@code restartPathfinding}
+     */
+    public static boolean consumePrecalcLegIfMatches(WorldPoint expectedTo) {
+        if (expectedTo == null) {
+            return false;
+        }
+        synchronized (pathfinderMutex) {
+            Pathfinder precalc = precalcLegPathfinder;
+            WorldPoint to = precalcLegTo;
+            if (precalc == null || !expectedTo.equals(to) || !precalc.isDone()
+                    || precalc.getPath() == null || precalc.getPath().isEmpty()) {
+                return false;
+            }
+            if (pathfinder != null) {
+                pathfinder.cancel();
+                if (pathfinderFuture != null) {
+                    pathfinderFuture.cancel(true);
+                }
+            }
+            pathfinder = precalc;
+            pathfinderFuture = null;
+            precalcLegPathfinder = null;
+            precalcLegTo = null;
+            if (precalcLegFuture != null) {
+                precalcLegFuture.cancel(true);
+                precalcLegFuture = null;
+            }
+            return true;
+        }
+    }
+
+    public static void cancelPrecalcLeg() {
+        synchronized (pathfinderMutex) {
+            if (precalcLegFuture != null) {
+                precalcLegFuture.cancel(true);
+                precalcLegFuture = null;
+            }
+            if (precalcLegPathfinder != null) {
+                precalcLegPathfinder.cancel();
+                precalcLegPathfinder = null;
+            }
+            precalcLegTo = null;
         }
     }
 
@@ -592,11 +699,8 @@ public class ShortestPathPlugin extends Plugin implements KeyListener {
         if (client.isKeyPressed(KeyCode.KC_SHIFT)
                 && event.getType() == MenuAction.WALK.getId()) {
             addMenuEntry(event, SET, TARGET, 1);
+            addQueuedSetTargetMenuEntry(event, 1);
             if (pathfinder != null) {
-                if (!pathfinder.getTargets().isEmpty()) {
-                    addMenuEntry(event, SET, TARGET + ColorUtil.wrapWithColorTag(" " +
-                            (pathfinder.getTargets().size() + 1), JagexColors.MENU_TARGET), 1);
-                }
                 for (WorldPoint target : pathfinder.getTargets()) {
                     if (target != null) {
                         addMenuEntry(event, SET, START, 1);
@@ -622,15 +726,12 @@ public class ShortestPathPlugin extends Plugin implements KeyListener {
                 client.getMouseCanvasPosition().getX(),
                 client.getMouseCanvasPosition().getY())) {
             addMenuEntry(event, SET, TARGET, 0);
+            addQueuedSetTargetMenuEntry(event, 0);
             if (Microbot.isDebug()) {
                 addMenuEntry(event, SET, TEST, 0);
             }
             final Pathfinder pathfinder = ShortestPathPlugin.pathfinder;
             if (pathfinder != null) {
-                if (!pathfinder.getTargets().isEmpty()) {
-                    addMenuEntry(event, SET, TARGET + ColorUtil.wrapWithColorTag(" " +
-                            (pathfinder.getTargets().size() + 1), JagexColors.MENU_TARGET), 0);
-                }
                 for (WorldPoint target : pathfinder.getTargets()) {
                     if (target != null) {
                         addMenuEntry(event, SET, START, 0);
@@ -657,6 +758,9 @@ public class ShortestPathPlugin extends Plugin implements KeyListener {
     }
 
     public static Map<WorldPoint, Set<Transport>> getTransports() {
+        if (pathfinderConfig == null) {
+            return Collections.emptyMap();
+        }
         return pathfinderConfig.getTransports();
     }
 
@@ -734,9 +838,16 @@ public class ShortestPathPlugin extends Plugin implements KeyListener {
 	}
 
     private void onMenuOptionClicked(MenuEntry entry) {
-        if (entry.getOption().equals(SET) && entry.getTarget().equals(TARGET)) {
+        if (isSetTargetMenuEntry(entry)) {
             WorldPoint worldPoint = getSelectedWorldPoint();
-            shortestPathScript.setTriggerWalker(worldPoint);
+            if (worldPoint == null) {
+                return;
+            }
+            if (shortestPathScript.isWalkLegBusy()) {
+                shortestPathScript.enqueueWalkTarget(worldPoint);
+            } else {
+                shortestPathScript.setTriggerWalker(worldPoint);
+            }
         }
         if (entry.getOption().equals(SET) && entry.getTarget().equals(TEST)) {
             //For debugging you can use setTarget, it will calculate path without walking
@@ -749,8 +860,24 @@ public class ShortestPathPlugin extends Plugin implements KeyListener {
         }
 
         if (entry.getOption().equals(CLEAR) && entry.getTarget().equals(PATH)) {
-			shortestPathScript.setTriggerWalker(null);
+			shortestPathScript.setTriggerWalker(null, "menu:clear-path");
         }
+    }
+
+    private void addQueuedSetTargetMenuEntry(MenuEntryAdded event, int position) {
+        int next = shortestPathScript.getNextSetTargetMenuNumber();
+        if (next >= 2) {
+            addMenuEntry(event, SET, TARGET + ColorUtil.wrapWithColorTag(" " + next, JagexColors.MENU_TARGET), position);
+        }
+    }
+
+    private boolean isSetTargetMenuEntry(MenuEntry entry) {
+        if (!SET.equals(entry.getOption())) {
+            return false;
+        }
+        String strippedTarget = Text.removeTags(entry.getTarget());
+        String baseTarget = Text.removeTags(TARGET);
+        return strippedTarget.equals(baseTarget) || strippedTarget.startsWith(baseTarget + " ");
     }
 
     private WorldPoint getSelectedWorldPoint() {
@@ -1062,7 +1189,7 @@ public class ShortestPathPlugin extends Plugin implements KeyListener {
          * Therefor CTRL + X seemed a bit more robust and userfriendly
          */
         if (e.getKeyCode() == KeyEvent.VK_X && e.isControlDown()) {
-			shortestPathScript.setTriggerWalker(null);
+			shortestPathScript.setTriggerWalker(null, "hotkey:ctrl+x");
             e.consume();
         }
     }

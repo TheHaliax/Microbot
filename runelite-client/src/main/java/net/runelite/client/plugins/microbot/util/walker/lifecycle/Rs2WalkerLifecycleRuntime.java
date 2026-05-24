@@ -24,6 +24,20 @@ public final class Rs2WalkerLifecycleRuntime {
     private Rs2WalkerLifecycleRuntime() {
     }
 
+    /**
+     * Applies marker and pathfinder for a new leg. Uses precalc when it matches {@code target}.
+     */
+    public static void prepareWalkerLeg(WorldPoint target) {
+        if (target == null) {
+            return;
+        }
+        if (ShortestPathPlugin.consumePrecalcLegIfMatches(target)) {
+            applyWalkerMarker(target);
+            return;
+        }
+        applyWalkerDestination(target);
+    }
+
     public static void applyWalkerDestination(WorldPoint target) {
         if (target == null) {
             return;
@@ -43,17 +57,7 @@ public final class Rs2WalkerLifecycleRuntime {
             return;
         }
 
-        WorldMapPointManager wmm = Microbot.getWorldMapPointManager();
-        if (wmm == null) {
-            Rs2Walker.clearWalkingRoute("walker:wmm-unavailable retry-setTarget dest=" + target);
-            return;
-        }
-        wmm.removeIf(x -> x == ShortestPathPlugin.getMarker());
-        ShortestPathPlugin.setMarker(new WorldMapPoint(target, ShortestPathPlugin.MARKER_IMAGE));
-        ShortestPathPlugin.getMarker().setName("Target");
-        ShortestPathPlugin.getMarker().setTarget(ShortestPathPlugin.getMarker().getWorldPoint());
-        ShortestPathPlugin.getMarker().setJumpOnClick(true);
-        wmm.add(ShortestPathPlugin.getMarker());
+        applyWalkerMarker(target);
 
         WorldPoint start = Microbot.getClientThread().invoke(() -> {
             if (client.getTopLevelWorldView().isInstance()) {
@@ -80,6 +84,22 @@ public final class Rs2WalkerLifecycleRuntime {
                 : start;
         ShortestPathPlugin.setLastLocation(effectiveStart);
         Microbot.getClientThread().runOnSeperateThread(() -> restartPathfinding(effectiveStart, target));
+    }
+
+    static void applyWalkerMarker(WorldPoint target) {
+        if (target == null || !Microbot.isLoggedIn()) {
+            return;
+        }
+        WorldMapPointManager wmm = Microbot.getWorldMapPointManager();
+        if (wmm == null) {
+            return;
+        }
+        wmm.removeIf(x -> x == ShortestPathPlugin.getMarker());
+        ShortestPathPlugin.setMarker(new WorldMapPoint(target, ShortestPathPlugin.MARKER_IMAGE));
+        ShortestPathPlugin.getMarker().setName("Target");
+        ShortestPathPlugin.getMarker().setTarget(ShortestPathPlugin.getMarker().getWorldPoint());
+        ShortestPathPlugin.getMarker().setJumpOnClick(true);
+        wmm.add(ShortestPathPlugin.getMarker());
     }
 
     public static boolean restartPathfinding(WorldPoint start, WorldPoint end) {

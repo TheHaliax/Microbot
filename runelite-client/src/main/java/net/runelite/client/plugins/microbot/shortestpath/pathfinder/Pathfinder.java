@@ -162,22 +162,11 @@ public class Pathfinder implements Runnable {
     }
 
     /**
-     * Smoothed view of {@link #getPath()} for walker consumption. Collapses
-     * straight-line runs of adjacent tiles using line-of-sight checks so that
-     * the walker's main loop iterates fewer waypoints and issues fewer
-     * minimap clicks. Falls back to the raw path while the pathfinder is
-     * still running (smoothing only runs once after completion).
+     * Path for walker consumption. Returns the raw BFS tile path ({@link #getPath()}).
+     * {@link PathSmoother} remains available for benchmarks and offline metrics only.
      */
     public List<WorldPoint> getWalkablePath() {
-        List<WorldPoint> raw = getPath();
-        if (!done || raw == null || raw.isEmpty()) {
-            return raw;
-        }
-        if (!smoothed) {
-            smoothedPath = PathSmoother.smooth(raw, map, buildTransportAnchors(raw), config.getBlockedTransportEdgesPacked());
-            smoothed = true;
-        }
-        return smoothedPath;
+        return getPath();
     }
 
     // Tiles in the raw path that are transport origins or destinations. The smoother
